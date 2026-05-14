@@ -1,0 +1,13 @@
+# Bỏ qua môi trường ảo và cache của Python
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Bỏ qua file chứa thông tin bảo mật
+.env
+
+# Bỏ qua các file rác của hệ điều hành và IDE
+.DS_Store
+.vscode/
+.idea/

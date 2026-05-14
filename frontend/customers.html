@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Management - RMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 flex h-screen overflow-hidden">
+
+    <div class="w-72 bg-slate-900 min-h-screen text-white p-6 sticky top-0 shadow-xl flex flex-col z-20">
+        <div class="flex items-center gap-4 mb-8 px-2">
+            <div class="bg-blue-500 p-3 rounded-xl shadow-lg">
+                <i class="fas fa-utensils text-2xl text-white"></i>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold tracking-tight">RMS Pro</h2>
+                <p class="text-xs text-slate-400">Enterprise Edition</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 p-4 rounded-xl mb-8 border border-slate-700">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2"><i class="fas fa-user-shield mr-1"></i> Role Simulator</label>
+            <select id="role-simulator" onchange="changeRole()" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white font-bold outline-none focus:border-blue-500 transition">
+                <option value="admin">👨‍💻 Admin (Full Access)</option>
+                <option value="manager">👔 Manager (Management)</option>
+                <option value="cashier">💵 Cashier (Payments)</option>
+                <option value="waiter">💁‍♂️ Waiter (Ordering)</option>
+                <option value="chef">🧑‍🍳 Chef (Kitchen)</option>
+            </select>
+        </div>
+
+        <nav class="space-y-2 flex-1" id="main-nav">
+            <a href="dashboard.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager">
+                <i class="fas fa-chart-line w-5"></i> Dashboard
+            </a>
+            <a href="customers.html" class="rbac-nav flex items-center gap-3 p-3 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30" data-allowed="admin,manager,cashier">
+                <i class="fas fa-users w-5"></i> Customers (CRM)
+            </a>
+            <a href="tables.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,waiter,cashier">
+                <i class="fas fa-th-large w-5"></i> Table Map (Live)
+            </a>
+            <a href="pos.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter">
+                <i class="fas fa-shopping-cart w-5"></i> Point of Sale (POS)
+            </a>
+            <a href="invoices.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-file-invoice-dollar w-5"></i> Invoice History
+            </a>
+            <a href="menu.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter,chef">
+                <i class="fas fa-list w-5"></i> Menu & Inventory
+            </a>
+        </nav>
+    </div>
+
+    <div class="flex-1 p-8 overflow-y-auto relative">
+        <header class="flex justify-between items-end mb-6">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800">Customer Relationship</h1>
+                <p class="text-slate-500 mt-1" id="api-status"><i class="fas fa-circle-notch fa-spin mr-1"></i> Connecting to Database...</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="loadCustomers()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 transition font-bold text-slate-600 shadow-sm text-sm">
+                    <i class="fas fa-sync-alt mr-2"></i> Refresh
+                </button>
+                <button onclick="openCustomerModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md transition font-bold text-sm flex items-center gap-2">
+                    <i class="fas fa-user-plus"></i> Add Customer
+                </button>
+            </div>
+        </header>
+
+        <div class="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex w-full md:w-2/3 gap-3">
+                <div class="relative flex-1">
+                    <i class="fas fa-search absolute left-4 top-2.5 text-slate-400"></i>
+                    <input type="text" id="customer-search-box" oninput="filterAndSortCustomers()" placeholder="Search by name, phone, or email..." class="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-10 pr-4 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all">
+                </div>
+                <select id="customer-sort" onchange="filterAndSortCustomers()" class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm font-bold text-slate-600 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                    <option value="points_desc">Highest Points</option>
+                    <option value="name_asc">Name (A-Z)</option>
+                    <option value="id_asc">ID (Oldest First)</option>
+                    <option value="id_desc">ID (Newest First)</option>
+                </select>
+            </div>
+            <div class="text-[11px] font-bold text-slate-500 flex gap-3">
+    <span class="bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-200">
+        <i class="fas fa-gem mr-1"></i> Platinum: > 1,000 pts
+    </span>
+    <span class="bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg border border-yellow-200">
+        <i class="fas fa-crown mr-1"></i> Gold: > 500 pts
+    </span>
+    <span class="bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300">
+        <i class="fas fa-medal mr-1"></i> Silver: > 200 pts
+    </span>
+</div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 text-[10px] text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                        <th class="py-4 pl-6 w-16">ID</th>
+                        <th class="py-4">Customer Info</th>
+                        <th class="py-4">Contact Details</th>
+                        <th class="py-4 text-center">Tier</th>
+                        <th class="py-4 text-right">Loyalty Pts</th>
+                        <th class="py-4 text-center">Status</th>
+                        <th class="py-4 text-right pr-6">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="customer-list" class="text-sm">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="customer-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col transform transition-all relative">
+            
+            <div class="bg-slate-800 p-5 flex justify-between items-center text-white">
+                <h2 class="text-lg font-bold flex items-center gap-2" id="modal-title">
+                    <i class="fas fa-user-edit text-blue-400"></i> Customer Details
+                </h2>
+                <button onclick="closeCustomerModal()" class="text-slate-400 hover:text-white transition text-xl"><i class="fas fa-times"></i></button>
+            </div>
+
+            <div class="p-8 space-y-5 bg-slate-50 flex-1">
+                <input type="hidden" id="cust-id"> 
+                <div class="grid grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Full Name <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                            <i class="fas fa-user absolute left-4 top-3 text-slate-400"></i>
+                            <input type="text" id="cust-name" placeholder="John Doe" class="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-blue-500 text-sm shadow-sm font-bold text-slate-700">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Phone Number <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                            <i class="fas fa-phone absolute left-4 top-3 text-slate-400"></i>
+                            <input type="text" id="cust-phone" placeholder="0901234567" class="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-blue-500 text-sm shadow-sm font-bold text-slate-700">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Email Address</label>
+                        <div class="relative">
+                            <i class="fas fa-envelope absolute left-4 top-3 text-slate-400"></i>
+                            <input type="email" id="cust-email" placeholder="example@email.com" class="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-blue-500 text-sm shadow-sm font-medium text-slate-600">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Loyalty Points</label>
+                        <div class="relative">
+                            <i class="fas fa-star absolute left-4 top-3 text-yellow-500"></i>
+                            <input type="number" id="cust-points" value="0" min="0" class="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-blue-500 text-sm shadow-sm font-black text-blue-600">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Physical Address</label>
+                    <textarea id="cust-address" rows="2" placeholder="Street, City, State..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm resize-none shadow-sm"></textarea>
+                </div>
+
+                <div class="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <input type="checkbox" id="cust-status" checked class="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500">
+                    <label for="cust-status" class="text-sm font-bold text-slate-700 cursor-pointer">Active Account</label>
+                </div>
+
+                <button onclick="saveCustomer()" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition flex items-center justify-center gap-2 mt-4">
+                    <i class="fas fa-save"></i> Save Customer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = localStorage.getItem('userRole') || 'admin';
+        let allCustomers = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const roleSelect = document.getElementById('role-simulator');
+            if(roleSelect) roleSelect.value = currentRole;
+            applyRBAC();
+            loadCustomers();
+        });
+
+        // HÀM PHÂN QUYỀN RBAC
+        function changeRole() {
+            currentRole = document.getElementById('role-simulator').value;
+            localStorage.setItem('userRole', currentRole);
+            applyRBAC();
+        }
+
+        function applyRBAC() {
+            document.querySelectorAll('.rbac-nav').forEach(nav => {
+                const allowedRoles = nav.getAttribute('data-allowed').split(',');
+                if (allowedRoles.includes(currentRole)) nav.style.display = 'flex';
+                else nav.style.display = 'none';
+            });
+            
+            const currentPage = window.location.pathname.split('/').pop() || 'customers.html';
+            const currentNav = document.querySelector(`.rbac-nav[href="${currentPage}"]`);
+            if (currentNav && !currentNav.getAttribute('data-allowed').includes(currentRole)) {
+                alert(`⛔ SECURITY ALERT: Role [${currentRole.toUpperCase()}] is not authorized to access CRM!`);
+                window.location.href = "menu.html"; 
+            }
+        }
+        async function loadCustomers() {
+            document.getElementById('api-status').innerHTML = `<span class="text-blue-500 font-bold"><i class="fas fa-circle-notch fa-spin mr-1"></i> Syncing...</span>`;
+            try {
+                const response = await fetch("http://127.0.0.1:8000/api/v1/customers/");
+                if(!response.ok) throw new Error("Failed to fetch API");
+                
+                let data = await response.json();
+                allCustomers = data;
+                document.getElementById('api-status').innerHTML = `<span class="text-green-500 font-bold"><i class="fas fa-check-circle mr-1"></i> Live Data (${allCustomers.length} clients)</span>`;
+                
+                filterAndSortCustomers(); 
+            } catch (error) {
+                console.error(error);
+                document.getElementById('api-status').innerHTML = `<span class="text-red-500 font-bold"><i class="fas fa-exclamation-circle mr-1"></i> API Disconnected. Backend is offline.</span>`;
+                document.getElementById('customer-list').innerHTML = `<tr><td colspan="7" class="py-10 text-center text-red-400 font-bold"><i class="fas fa-plug mr-2"></i> Cannot connect to Server. Please run 'uvicorn src.main:app --reload'.</td></tr>`;
+            }
+        }
+        function filterAndSortCustomers() {
+            const keyword = document.getElementById('customer-search-box').value.toLowerCase();
+            const sortMethod = document.getElementById('customer-sort').value;
+
+            let processedData = allCustomers.filter(item => {
+                const matchName = (item.name || "").toLowerCase().includes(keyword);
+                const matchPhone = (item.phone || "").includes(keyword);
+                const matchEmail = (item.email || "").toLowerCase().includes(keyword);
+                return matchName || matchPhone || matchEmail;
+            });
+
+    
+            processedData.sort((a, b) => {
+                if (sortMethod === 'points_desc') return b.points - a.points;
+                if (sortMethod === 'name_asc') return a.name.localeCompare(b.name);
+                if (sortMethod === 'id_asc') return a.id - b.id;
+                if (sortMethod === 'id_desc') return b.id - a.id;
+                return 0;
+            });
+
+            renderCustomers(processedData);
+        }
+        function renderCustomers(items) {
+            const tbody = document.getElementById('customer-list');
+            tbody.innerHTML = '';
+
+            if (items.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-10 text-center text-slate-400 italic font-medium">No customers found...</td></tr>`;
+                return;
+            }
+
+            items.forEach(c => {
+                const isActive = c.is_active === 1 || c.is_active === true;
+                
+                // Logic phân hạng đồng bộ với Dashboard
+                let tierHtml = '';
+                if (c.points >= 1000) {
+                    tierHtml = `<span class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[10px] font-black uppercase shadow-sm border border-purple-200"><i class="fas fa-gem mr-1"></i> Platinum</span>`;
+                } else if (c.points >= 500) {
+                    tierHtml = `<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase shadow-sm border border-yellow-300"><i class="fas fa-crown mr-1"></i> Gold</span>`;
+                } else if (c.points >= 200) {
+                    tierHtml = `<span class="bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase shadow-sm border border-slate-300"><i class="fas fa-medal mr-1"></i> Silver</span>`;
+                } else {
+                    tierHtml = `<span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase"><i class="fas fa-user mr-1"></i> Member</span>`;
+                }
+
+                const statusBadge = isActive 
+                    ? `<span class="text-green-500 font-bold text-xs"><i class="fas fa-circle text-[8px] mr-1"></i> Active</span>`
+                    : `<span class="text-red-500 font-bold text-xs"><i class="fas fa-circle text-[8px] mr-1"></i> Locked</span>`;
+                
+                const rowClass = isActive ? "hover:bg-slate-50/80" : "bg-slate-50/50 opacity-70";
+                const toggleIcon = isActive ? "fa-toggle-on text-green-500" : "fa-toggle-off text-slate-400";
+
+                tbody.innerHTML += `
+                    <tr class="border-b border-slate-50 transition ${rowClass}">
+                        <td class="py-4 pl-6 font-mono font-bold text-blue-400 text-xs">#${c.id}</td>
+                        <td class="py-4">
+                            <p class="font-bold text-slate-800">${c.name}</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5"><i class="far fa-calendar-alt mr-1"></i> Joined: ${c.joinDate}</p>
+                        </td>
+                        <td class="py-4">
+                            <p class="text-sm font-bold text-slate-600"><i class="fas fa-phone-alt mr-1 text-slate-400 w-4 text-center"></i> ${c.phone}</p>
+                            ${c.email ? `<p class="text-[11px] text-slate-400 mt-0.5"><i class="fas fa-envelope mr-1 text-slate-300 w-4 text-center"></i> ${c.email}</p>` : ''}
+                        </td>
+                        <td class="py-4 text-center">${tierHtml}</td>
+                        <td class="py-4 text-right">
+                            <span class="font-black text-blue-600 text-lg">${c.points.toLocaleString('en-US')}</span>
+                        </td>
+                        <td class="py-4 text-center">${statusBadge}</td>
+                        <td class="py-4 text-right pr-6 space-x-3">
+                            <button onclick="openCustomerModal(${c.id})" class="text-blue-500 hover:text-blue-700 font-bold bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition" title="Edit Customer">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="toggleCustomerStatus(${c.id}, ${isActive})" class="text-2xl align-middle hover:scale-110 transition-transform shadow-sm rounded-full text-slate-300 hover:text-slate-500" title="Toggle Lock/Active">
+                                <i class="fas ${toggleIcon}"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // ==========================================
+        // CÁC HÀM XỬ LÝ API (THÊM / SỬA)
+        // ==========================================
+        function openCustomerModal(id = null) {
+            const modal = document.getElementById('customer-modal');
+            const title = document.getElementById('modal-title');
+            
+            if (id) {
+                // Chế độ SỬA (Edit)
+                const c = allCustomers.find(item => item.id === id);
+                if (!c) return;
+                
+                title.innerHTML = `<i class="fas fa-user-edit text-blue-400"></i> Edit Customer (ID: ${id})`;
+                document.getElementById('cust-id').value = c.id;
+                document.getElementById('cust-name').value = c.name;
+                document.getElementById('cust-phone').value = c.phone;
+                document.getElementById('cust-email').value = c.email || '';
+                document.getElementById('cust-address').value = c.address || '';
+                document.getElementById('cust-points').value = c.points;
+                document.getElementById('cust-status').checked = c.is_active === 1 || c.is_active === true;
+            } else {
+                // Chế độ THÊM MỚI (Add)
+                title.innerHTML = `<i class="fas fa-user-plus text-green-400"></i> Add New Customer`;
+                document.getElementById('cust-id').value = '';
+                document.getElementById('cust-name').value = '';
+                document.getElementById('cust-phone').value = '';
+                document.getElementById('cust-email').value = '';
+                document.getElementById('cust-address').value = '';
+                document.getElementById('cust-points').value = 0;
+                document.getElementById('cust-status').checked = true;
+            }
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeCustomerModal() {
+            document.getElementById('customer-modal').classList.add('hidden');
+        }
+
+        async function saveCustomer() {
+            const id = document.getElementById('cust-id').value;
+            const name = document.getElementById('cust-name').value;
+            const phone = document.getElementById('cust-phone').value;
+            const email = document.getElementById('cust-email').value || null;
+            const address = document.getElementById('cust-address').value || null;
+            const points = parseInt(document.getElementById('cust-points').value) || 0;
+            const isActive = document.getElementById('cust-status').checked;
+
+            if(!name || !phone) {
+                return alert("Please enter both Name and Phone number!");
+            }
+
+            const payload = { name, phone, email, address, points, is_active: isActive };
+            const url = id ? `http://127.0.0.1:8000/api/v1/customers/${id}` : `http://127.0.0.1:8000/api/v1/customers/`;
+            const method = id ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                
+                if(!response.ok) {
+                    throw new Error(data.detail || "Server error");
+                }
+
+                alert(`✅ Customer saved successfully!`);
+                closeCustomerModal();
+                loadCustomers(); // Load lại dữ liệu mới nhất từ Server
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
+
+        async function toggleCustomerStatus(id, currentStatus) {
+            const newStatus = !currentStatus;
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/customers/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_active: newStatus })
+                });
+
+                if(!response.ok) throw new Error("Failed to update status");
+                loadCustomers(); // Load lại màn hình
+            } catch(error) {
+                alert("❌ Cannot change customer status right now.");
+            }
+        }
+    </script>
+</body>
+</html>

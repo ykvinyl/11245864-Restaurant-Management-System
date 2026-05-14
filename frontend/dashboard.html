@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strategic Dashboard - RMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .table-card { transition: all 0.3s ease; }
+        .table-card:hover { transform: translateY(-5px); }
+        .table-container { position: relative; }
+        .table-tooltip {
+            visibility: hidden;
+            position: absolute;
+            z-index: 50;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            background-color: #1e293b; 
+            color: white;
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .table-container:hover .table-tooltip { visibility: visible; opacity: 1; }
+        .table-tooltip::after {
+            content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
+            border-width: 5px; border-style: solid; border-color: #1e293b transparent transparent transparent;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 flex">
+
+    <div class="w-72 bg-slate-900 min-h-screen text-white p-6 sticky top-0 shadow-xl flex flex-col z-20">
+        <div class="flex items-center gap-4 mb-8 px-2">
+            <div class="bg-blue-500 p-3 rounded-xl shadow-lg">
+                <i class="fas fa-utensils text-2xl text-white"></i>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold tracking-tight">RMS Pro</h2>
+                <p class="text-xs text-slate-400">Enterprise Edition</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 p-4 rounded-xl mb-8 border border-slate-700">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2"><i class="fas fa-user-shield mr-1"></i> Role Simulator</label>
+            <select id="role-simulator" onchange="changeRole()" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white font-bold outline-none focus:border-blue-500 transition">
+                <option value="admin">👨‍💻 Admin (Full Access)</option>
+                <option value="manager">👔 Manager (Management)</option>
+                <option value="cashier">💵 Cashier (Payments)</option>
+                <option value="waiter">💁‍♂️ Waiter (Ordering)</option>
+                <option value="chef">🧑‍🍳 Chef (Kitchen)</option>
+            </select>
+        </div>
+
+        <nav class="space-y-2 flex-1" id="main-nav">
+            <a href="dashboard.html" class="rbac-nav flex items-center gap-3 p-3 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30" data-allowed="admin,manager">
+                <i class="fas fa-chart-line w-5"></i> Dashboard
+            </a>
+            <a href="customers.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-users w-5"></i> Customers (CRM)
+            </a>
+            <a href="tables.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,waiter,cashier">
+                <i class="fas fa-th-large w-5"></i> Table Map (Live)
+            </a>
+            <a href="pos.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter">
+                <i class="fas fa-shopping-cart w-5"></i> Point of Sale (POS)
+            </a>
+            <a href="invoices.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-file-invoice-dollar w-5"></i> Invoice History
+            </a>
+            <a href="menu.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter,chef">
+                <i class="fas fa-list w-5"></i> Menu & Inventory
+            </a>
+        </nav>
+    </div>
+
+    <div class="flex-1 p-8 overflow-y-auto">
+        <header class="flex justify-between items-end mb-10">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800">Strategic Analytics</h1>
+                <p class="text-slate-500 mt-1">Status: <span id="connection-status" class="font-mono font-bold text-orange-500">Connecting to API...</span></p>
+            </div>
+            <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                <div class="text-right">
+                    <p class="text-xs font-bold text-slate-400 uppercase">Duty Manager</p>
+                    <p class="text-sm font-bold text-slate-700" id="staff-name">Administrator</p>
+                </div>
+                <div class="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-user-shield text-slate-400"></i>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Today's Revenue</p>
+                <div class="flex items-center justify-between mt-2">
+                    <h3 class="text-3xl font-black text-slate-800" id="kpi-revenue">...</h3>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Table Occupancy</p>
+                <div class="flex items-center justify-between mt-2">
+                    <h3 class="text-3xl font-black text-slate-800" id="kpi-occupancy">...</h3>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-xs font-black text-slate-400 uppercase tracking-widest">New Orders</p>
+                <h3 class="text-3xl font-black text-slate-800 mt-2" id="kpi-orders">...</h3>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Live Guests</p>
+                <h3 class="text-3xl font-black text-blue-600 mt-2" id="kpi-guests">...</h3>
+            </div>
+        </div>
+
+        <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 mb-10">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">Detailed Revenue Report</h2>
+                    <p class="text-xs text-slate-400 mt-1">Aggregated from Invoices table (Status: Paid)</p>
+                </div>
+                <div class="flex bg-slate-100 p-1 rounded-xl">
+                    <button onclick="switchRevenueView('day')" id="btn-rev-day" class="px-4 py-2 text-xs font-bold rounded-lg text-slate-500 hover:text-slate-700 transition">Daily</button>
+                    <button onclick="switchRevenueView('week')" id="btn-rev-week" class="px-4 py-2 text-xs font-bold rounded-lg text-slate-500 hover:text-slate-700 transition">Weekly</button>
+                    <button onclick="switchRevenueView('month')" id="btn-rev-month" class="px-4 py-2 text-xs font-bold rounded-lg bg-white shadow-sm text-blue-600 transition">Monthly</button>
+                </div>
+            </div>
+
+            <div class="overflow-hidden border border-slate-50 rounded-2xl">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-50 text-slate-400 text-[10px] uppercase tracking-widest">
+                        <tr>
+                            <th class="py-4 px-6">Period</th>
+                            <th class="py-4 px-6 text-center">Orders</th>
+                            <th class="py-4 px-6 text-center">Net Revenue</th>
+                            <th class="py-4 px-6 text-center">Tax (8%)</th>
+                            <th class="py-4 px-6 text-right">Gross Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody id="revenue-report-body" class="text-sm font-medium text-slate-600">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+            <div class="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center mb-8">
+                    <h3 class="font-bold text-slate-700 uppercase text-sm tracking-widest">Peak Hours Traffic</h3>
+                </div>
+                <canvas id="peakHoursChart" height="100"></canvas>
+            </div>
+            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center">
+                <h3 class="font-bold text-slate-700 uppercase text-sm tracking-widest mb-8 text-center">Revenue by Dish</h3>
+                <canvas id="dishPieChart"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 mb-10">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="font-bold text-slate-700 uppercase text-sm tracking-widest">Menu Performance Analysis</h3>
+                    <p class="text-xs text-slate-400 mt-1">Data retrieved from View <code class="bg-slate-100 text-pink-500 px-1 rounded">vw_TopSellingDishes</code></p>
+                </div>
+                <button class="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition">
+                    <i class="fas fa-file-csv mr-2"></i> Export CSV
+                </button>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-50 text-slate-400 text-[10px] uppercase tracking-widest border-y border-slate-100">
+                        <tr>
+                            <th class="py-4 pl-4 text-center w-16">Rank</th>
+                            <th class="py-4 px-4">Dish Name</th>
+                            <th class="py-4 px-4 text-center">Units Sold</th>
+                            <th class="py-4 px-4 text-right">Total Revenue</th>
+                            <th class="py-4 px-4 text-center">Share (%)</th>
+                            <th class="py-4 pr-4 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="top-dishes-table-body" class="text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 mb-10">
+            <h3 class="font-bold text-slate-700 uppercase text-sm tracking-widest mb-6">Live Table Status</h3>
+            <div class="grid grid-cols-5 gap-4" id="table-grid"></div>
+        </div>
+
+        <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 mb-10">
+            <h3 class="font-bold text-slate-700 uppercase text-sm tracking-widest mb-6">🏆 Loyalty Leaderboard</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-xs text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                            <th class="pb-3 pl-2">Rank</th>
+                            <th class="pb-3">Customer</th>
+                            <th class="pb-3">Loyalty Points</th>
+                            <th class="pb-3">Tier</th>
+                            <th class="pb-3 text-right pr-4">Current Benefit</th>
+                        </tr>
+                    </thead>
+                    <tbody id="loyalty-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <h3 class="font-black text-slate-800 text-xl tracking-tight uppercase">Market Basket Analysis</h3>
+                        <p class="text-xs text-slate-500 font-medium">Discover customer purchasing behaviors through association rules</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-100">
+                                <th class="pb-5 font-black">Source Item</th>
+                                <th class="pb-5 font-black">Suggested Cross-sell</th>
+                                <th class="pb-5 font-black text-center w-48">Confidence Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="market-basket-body" class="text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 p-8 rounded-3xl shadow-2xl text-white">
+                <h3 class="font-bold text-blue-400 uppercase text-xs tracking-[0.2em] mb-8"><i class="fas fa-robot mr-2"></i> Automated Insights</h3>
+                <div id="automated-insights-container" class="space-y-6">
+                    <i class="fas fa-circle-notch fa-spin text-blue-500"></i> Loading AI suggestions...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = localStorage.getItem('userRole') || 'admin';
+        let currentDashboardData = null;
+        
+        let peakChartObj = null;
+        let dishChartObj = null;
+
+        const API_URL = "http://127.0.0.1:8000/api/v1/analytics/dashboard-full";
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const roleSelect = document.getElementById('role-simulator');
+            if(roleSelect) roleSelect.value = currentRole;
+            applyRBAC();
+            initDashboard();
+        });
+
+        function changeRole() {
+            currentRole = document.getElementById('role-simulator').value;
+            localStorage.setItem('userRole', currentRole);
+            applyRBAC();
+        }
+
+        function applyRBAC() {
+            document.querySelectorAll('.rbac-nav').forEach(nav => {
+                const allowedRoles = nav.getAttribute('data-allowed').split(',');
+                if (allowedRoles.includes(currentRole)) nav.style.display = 'flex';
+                else nav.style.display = 'none';
+            });
+            
+            const currentPage = window.location.pathname.split('/').pop() || 'dashboard.html';
+            const currentNav = document.querySelector(`.rbac-nav[href="${currentPage}"]`);
+            if (currentNav && !currentNav.getAttribute('data-allowed').includes(currentRole)) {
+                alert(`⛔ SECURITY ALERT: Role [${currentRole.toUpperCase()}] is not authorized to access the Dashboard!`);
+                window.location.href = "menu.html"; 
+            }
+        }
+
+        async function initDashboard() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error("API Fails");
+                const apiData = await response.json();
+
+                document.getElementById('connection-status').textContent = "Live Data (Connected)";
+                document.getElementById('connection-status').className = "font-mono font-bold text-green-600";
+                
+                renderAll(apiData);
+
+            } catch (error) {
+                console.error("API Disconnected.", error);
+                document.getElementById('connection-status').textContent = "Offline (API Disconnected)";
+                document.getElementById('connection-status').className = "font-mono font-bold text-red-500";
+                
+                renderAll({
+                    kpi: { revenue: "0 VND", occupancy: "0%", orders: 0, guests: 0 },
+                    revenueReport: { day: [], week: [], month: [] },
+                    peakHours: { labels: [], data: [] },
+                    dishes: { labels: [], data: [] },
+                    topDishesTable: [], tables: [], customers: [], marketBasket: [], insights: []
+                });
+            }
+        }
+
+        function switchRevenueView(period) {
+            if (!currentDashboardData || !currentDashboardData.revenueReport) return;
+            const btns = ['day', 'week', 'month'];
+            btns.forEach(b => {
+                const el = document.getElementById(`btn-rev-${b}`);
+                if(!el) return;
+                el.className = b === period ? "px-4 py-2 text-xs font-bold rounded-lg bg-white shadow-sm text-blue-600 transition" : "px-4 py-2 text-xs font-bold rounded-lg text-slate-500 hover:text-slate-700 transition";
+            });
+
+            const tbody = document.getElementById('revenue-report-body');
+            tbody.innerHTML = "";
+            const dataList = currentDashboardData.revenueReport[period] || [];
+            
+            if (dataList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400 italic">No revenue data available.</td></tr>`;
+                return;
+            }
+
+            dataList.forEach(item => {
+                tbody.innerHTML += `
+                    <tr class="border-b border-slate-50 hover:bg-slate-50 transition">
+                        <td class="py-3 px-6 font-bold text-slate-700">${item.period || '-'}</td>
+                        <td class="py-3 px-6 text-center font-mono text-slate-500">${item.orders || 0}</td>
+                        <td class="py-3 px-6 text-center text-slate-600">${item.net || '-'}</td>
+                        <td class="py-3 px-6 text-center text-orange-500">${item.tax || '-'}</td>
+                        <td class="py-3 px-6 text-right font-black text-blue-600">${item.gross || '-'}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderAll(data) {
+            currentDashboardData = data; 
+
+            document.getElementById("kpi-revenue").textContent = data.kpi?.revenue || "0 VND";
+            document.getElementById("kpi-occupancy").textContent = data.kpi?.occupancy || "0%";
+            document.getElementById("kpi-orders").textContent = data.kpi?.orders || "0";
+            document.getElementById("kpi-guests").textContent = data.kpi?.guests || "0";
+
+            switchRevenueView('month');
+
+            if(peakChartObj) peakChartObj.destroy();
+            peakChartObj = new Chart(document.getElementById('peakHoursChart'), {
+                type: 'line',
+                data: {
+                    labels: data.peakHours?.labels || [],
+                    datasets: [{
+                        label: 'Guests',
+                        data: data.peakHours?.data || [],
+                        borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4, borderWidth: 3
+                    }]
+                },
+                options: { plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false } } } }
+            });
+
+            if(dishChartObj) dishChartObj.destroy();
+            dishChartObj = new Chart(document.getElementById('dishPieChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: data.dishes?.labels || [],
+                    datasets: [{
+                        data: data.dishes?.data || [],
+                        backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { cutout: '65%', plugins: { legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true, font: {size: 10} } } } }
+            });
+
+            const tbodyDishes = document.getElementById("top-dishes-table-body");
+            tbodyDishes.innerHTML = "";
+            let dishesData = data.topDishesTable || [];
+            
+            if(dishesData && dishesData.length > 0) {
+                dishesData.forEach(dish => {
+                    let rankStyle = dish.rank === 1 ? "text-yellow-500 text-lg font-black drop-shadow-md" : (dish.rank <= 3 ? "text-slate-400 text-lg font-black" : "text-slate-400 font-bold");
+                    let statusBadge = "";
+                    if(dish.status === "best") statusBadge = `<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold"><i class="fas fa-crown"></i> Signature</span>`;
+                    else if(dish.status === "good") statusBadge = `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold"><i class="fas fa-arrow-trend-up"></i> Good</span>`;
+                    else if(dish.status === "average") statusBadge = `<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">Stable</span>`;
+                    else if(dish.status === "warning") statusBadge = `<span class="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold">Slow</span>`;
+                    else statusBadge = `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold"><i class="fas fa-triangle-exclamation"></i> At Risk</span>`;
+
+                    tbodyDishes.innerHTML += `
+                        <tr class="border-b border-slate-50 hover:bg-slate-50 transition">
+                            <td class="py-3 pl-4 text-center ${rankStyle}">#${dish.rank}</td>
+                            <td class="py-3 px-4 font-bold text-slate-700">${dish.name}</td>
+                            <td class="py-3 px-4 text-center font-mono text-slate-600">${dish.sold}</td>
+                            <td class="py-3 px-4 text-right font-black text-blue-600">${dish.revenue}</td>
+                            <td class="py-3 px-4 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <div class="w-16 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                        <div class="bg-blue-500 h-full" style="width: ${dish.percentage}%"></div>
+                                    </div>
+                                    <span class="text-xs font-mono text-slate-500">${dish.percentage}%</span>
+                                </div>
+                            </td>
+                            <td class="py-3 pr-4 text-center">${statusBadge}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbodyDishes.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-slate-400 italic">No menu performance data available.</td></tr>`;
+            }
+
+            const grid = document.getElementById('table-grid');
+            grid.innerHTML = "";
+            const tablesData = data.tables || [];
+            if(tablesData.length > 0) {
+                tablesData.forEach((t, index) => {
+                    const color = t.status === 'available' ? 'bg-green-500' : (t.status === 'occupied' ? 'bg-red-500' : 'bg-blue-500');
+                    const displayNum = t.tableNumber || index + 1;
+
+                    grid.innerHTML += `
+                        <div class="table-container">
+                            <div class="${color} h-14 rounded-xl flex flex-col items-center justify-center text-white font-bold shadow-lg cursor-pointer transition-transform hover:scale-105">
+                                <span class="text-xs uppercase opacity-70">Table</span>
+                                <span class="text-lg">${displayNum}</span>
+                            </div>
+                            <div class="table-tooltip text-left">
+                                <div class="flex justify-between border-b border-slate-700 pb-2 mb-2">
+                                    <span class="font-black text-blue-400 text-[10px] uppercase">Table ${displayNum} Info</span>
+                                    <span class="bg-slate-700 px-2 py-0.5 rounded text-[9px]">${t.capacity} seats</span>
+                                </div>
+                                <div class="space-y-1.5 text-[11px]">
+                                    <div class="flex justify-between"><span class="text-slate-400">Location:</span><span class="font-medium">${t.location || 'N/A'}</span></div>
+                                    <div class="flex justify-between"><span class="text-slate-400">Guest:</span><span class="font-medium text-orange-300">${t.customer || 'N/A'}</span></div>
+                                    <div class="flex justify-between border-t border-slate-700 pt-1.5 mt-1.5"><span class="text-slate-400">Bill Total:</span><span class="font-bold text-green-400">${t.orderTotal || '-'}</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                grid.innerHTML = `<div class="col-span-5 text-center text-slate-400 italic py-4">No live table data available.</div>`;
+            }
+
+            const tbodyLoyalty = document.getElementById("loyalty-table-body");
+            tbodyLoyalty.innerHTML = "";
+            const customersData = data.customers || [];
+            if(customersData.length > 0) {
+                customersData.forEach((c, index) => {
+                    let tier = "Member", color = "text-slate-500 bg-slate-100", benefit = "None";
+                    if (c.points >= 1000) { tier = "Platinum"; color = "text-purple-700 bg-purple-100"; benefit = "15% off total bill"; }
+                    else if (c.points >= 500) { tier = "Gold"; color = "text-yellow-700 bg-yellow-100"; benefit = "10% off total bill"; }
+                    else if (c.points >= 200) { tier = "Silver"; color = "text-slate-700 bg-slate-200"; benefit = "5% off total bill"; }
+
+                    tbodyLoyalty.innerHTML += `
+                        <tr class="border-b border-slate-50 hover:bg-slate-100/50 transition">
+                            <td class="py-4 pl-2 font-black text-slate-300">#${index + 1}</td>
+                            <td class="py-4"><p class="font-bold text-slate-700">${c.name}</p><p class="text-xs text-slate-400">${c.phone}</p></td>
+                            <td class="py-4 font-mono font-bold text-blue-600">${c.points} pt</td>
+                            <td class="py-4"><span class="px-3 py-1 rounded-lg text-xs font-bold ${color}">${tier}</span></td>
+                            <td class="py-4 text-right pr-4 text-xs font-medium text-slate-500">${benefit}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbodyLoyalty.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400 italic">No customer loyalty data available.</td></tr>`;
+            }
+
+            const tbodyBasket = document.getElementById("market-basket-body");
+            tbodyBasket.innerHTML = "";
+            const basketData = data.marketBasket || [];
+            if(basketData.length > 0) {
+                basketData.forEach(item => {
+                    const isHigh = item.confidence > 80;
+                    const barColor = isHigh ? "bg-green-500" : "bg-red-400";
+                    tbodyBasket.innerHTML += `
+                        <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition">
+                            <td class="py-4"><span class="bg-slate-100 px-3 py-1 rounded-lg font-bold text-slate-700">${item.source}</span></td>
+                            <td class="py-4 font-medium text-slate-600"><i class="fas ${item.targetIcon || 'fa-star'} mr-2 text-blue-400"></i>${item.target}</td>
+                            <td class="py-4 px-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden"><div class="${barColor} h-full" style="width: ${item.confidence}%"></div></div>
+                                    <span class="font-mono font-bold ${isHigh ? 'text-green-600' : 'text-red-600'} text-xs">${item.confidence}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } else {
+                // Simplified text for empty market basket state
+                tbodyBasket.innerHTML = `<tr><td colspan="3" class="py-8 text-center text-slate-400 italic">Gathering transaction data to uncover purchasing patterns...</td></tr>`;
+            }
+
+            generateInsights(data);
+        }
+
+        function generateInsights(data) {
+            const container = document.getElementById("automated-insights-container");
+            container.innerHTML = "";
+            let insightsList = data.insights || [];
+
+            if (insightsList.length === 0) {
+                container.innerHTML = `<div class="text-slate-400 italic text-sm py-4 text-center">Awaiting data to generate insights...</div>`;
+                return;
+            }
+
+            insightsList.forEach(insight => {
+                const cat = insight.category || 'Insight';
+                const title = insight.title || 'System Alert';
+                const msg = insight.message || '';
+
+                const colorMap = {
+                    "blue": { bg: "bg-blue-500", shadow: "rgba(59,130,246,0.5)" },
+                    "green": { bg: "bg-green-500", shadow: "rgba(16,185,129,0.5)" },
+                    "red": { bg: "bg-red-500", shadow: "rgba(239,68,68,0.5)" },
+                    "yellow": { bg: "bg-yellow-500", shadow: "rgba(234,179,8,0.5)" }
+                };
+                const theme = colorMap[insight.color] || colorMap["blue"];
+                
+                container.innerHTML += `
+                    <div class="relative pl-6 border-l border-slate-700 mt-6 transition-all hover:pl-8 duration-300 cursor-pointer">
+                        <div class="absolute -left-1 top-0 w-2 h-2 ${theme.bg} rounded-full shadow-[0_0_8px_${theme.shadow}]"></div>
+                        <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1"><i class="fas ${insight.icon || 'fa-bolt'} mr-1"></i> ${cat}</p>
+                        <p class="text-sm font-bold text-white mb-1">${title}</p>
+                        <p class="text-[11px] text-slate-400 leading-relaxed italic">"${msg}"</p>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>

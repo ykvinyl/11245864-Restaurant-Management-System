@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Management - RMS Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .line-clamp-1 {
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            line-clamp: 1;
+            -webkit-box-orient: vertical;  
+            overflow: hidden;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 flex h-screen overflow-hidden">
+
+    <div class="w-72 bg-slate-900 min-h-screen text-white p-6 sticky top-0 shadow-xl flex flex-col z-20">
+        <div class="flex items-center gap-4 mb-8 px-2">
+            <div class="bg-blue-500 p-3 rounded-xl shadow-lg">
+                <i class="fas fa-utensils text-2xl text-white"></i>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold tracking-tight">RMS Pro</h2>
+                <p class="text-xs text-slate-400">Enterprise Edition</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 p-4 rounded-xl mb-8 border border-slate-700">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2"><i class="fas fa-user-shield mr-1"></i> Role Simulator</label>
+            <select id="role-simulator" onchange="changeRole()" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white font-bold outline-none focus:border-blue-500 transition cursor-pointer">
+                <option value="admin">👨‍💻 Admin (Full Access)</option>
+                <option value="manager">👔 Manager</option>
+                <option value="cashier">💵 Cashier</option>
+                <option value="waiter">💁‍♂️ Waiter</option>
+                <option value="chef">🧑‍🍳 Chef</option>
+            </select>
+        </div>
+
+        <nav class="space-y-2 flex-1" id="main-nav">
+            <a href="dashboard.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager">
+                <i class="fas fa-chart-line w-5"></i> Dashboard
+            </a>
+            <a href="customers.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-users w-5"></i> Customers (CRM)
+            </a>
+            <a href="tables.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,waiter,cashier">
+                <i class="fas fa-th-large w-5"></i> Table Map (Live)
+            </a>
+            <a href="pos.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter">
+                <i class="fas fa-shopping-cart w-5"></i> Point of Sale (POS)
+            </a>
+            <a href="invoices.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-file-invoice-dollar w-5"></i> Invoice History
+            </a>
+            <a href="menu.html" class="rbac-nav flex items-center gap-3 p-3 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30" data-allowed="admin,manager,cashier,waiter,chef">
+                <i class="fas fa-list w-5"></i> Menu & Inventory
+            </a>
+        </nav>
+    </div>
+
+    <div class="flex-1 p-8 overflow-y-auto relative">
+        <header class="flex justify-between items-end mb-6">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800">Menu Management</h1>
+                <p class="text-slate-500 mt-1" id="api-status"><i class="fas fa-circle-notch fa-spin mr-1"></i> Connecting to Database...</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="loadMenu()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 transition font-bold text-slate-600 shadow-sm text-sm flex items-center">
+                    <i class="fas fa-sync-alt mr-2"></i> Refresh
+                </button>
+                <button onclick="openAddModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md transition font-bold text-sm flex items-center gap-2">
+                    <i class="fas fa-plus"></i> Add New Item
+                </button>
+            </div>
+        </header>
+
+        <div class="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex gap-2 overflow-x-auto no-scrollbar w-full md:w-auto" id="category-filter-container">
+            </div>
+            <div class="relative w-full md:w-72 shrink-0">
+                <i class="fas fa-search absolute left-4 top-2.5 text-slate-400"></i>
+                <input type="text" id="menu-search-box" oninput="filterMenu()" placeholder="Search dish name..." class="w-full bg-slate-50 border border-slate-200 rounded-full py-2 pl-10 pr-4 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-medium transition-all">
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 text-xs text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                        <th class="py-4 pl-6 w-16">ID</th>
+                        <th class="py-4 w-1/3">Dish Name & Description</th>
+                        <th class="py-4">Category</th>
+                        <th class="py-4 text-right">Price (VND)</th>
+                        <th class="py-4 text-center">Prep Time</th>
+                        <th class="py-4 text-center">Status</th>
+                        <th class="py-4 text-right pr-6">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="menu-list" class="text-sm">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="add-menu-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col transform transition-all relative">
+            <div class="bg-slate-800 p-5 flex justify-between items-center text-white">
+                <h2 class="text-lg font-bold flex items-center gap-2" id="modal-title">
+                    <i class="fas fa-utensils text-blue-400"></i> Add New Dish
+                </h2>
+                <button onclick="closeAddModal()" class="text-slate-400 hover:text-white transition text-xl"><i class="fas fa-times"></i></button>
+            </div>
+
+            <div class="p-8 space-y-5 bg-slate-50 flex-1">
+                <div class="grid grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Dish Name <span class="text-red-500">*</span></label>
+                        <input type="text" id="new-name" placeholder="E.g. Royal Crab Soup" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm shadow-sm font-bold text-slate-700">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Category <span class="text-red-500">*</span></label>
+                        
+                        <select id="new-category" class="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 font-bold text-sm shadow-sm text-slate-600 cursor-pointer">
+                            </select>
+                        <input type="text" id="custom-category" placeholder="+ Or type new category..." class="w-full mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 text-xs shadow-sm text-slate-600 font-medium transition" title="Leave blank to use selected category above">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Price (VND) <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                            <input type="number" id="new-price" placeholder="50000" class="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-10 py-2.5 outline-none focus:border-blue-500 text-sm shadow-sm font-bold text-blue-600">
+                            <span class="absolute right-4 top-2.5 text-slate-400 text-sm font-bold">đ</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Prep Time</label>
+                        <div class="relative">
+                            <input type="number" id="new-preptime" value="15" class="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-12 py-2.5 outline-none focus:border-blue-500 text-sm shadow-sm font-bold text-orange-600">
+                            <span class="absolute right-4 top-2.5 text-slate-400 text-sm font-bold">min</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Description</label>
+                    <textarea id="new-desc" rows="3" placeholder="Ingredients, cooking method..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm resize-none shadow-sm"></textarea>
+                </div>
+
+                <div class="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <input type="checkbox" id="new-status" checked class="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer">
+                    <label for="new-status" class="text-sm font-bold text-slate-700 cursor-pointer">Available for Sale (IsAvailable = 1)</label>
+                </div>
+
+                <button onclick="saveItem()" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition flex items-center justify-center gap-2 mt-4">
+                    <i class="fas fa-save"></i> <span id="save-btn-text">Save Item to Database</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = localStorage.getItem('userRole') || 'admin';
+        let allMenuItems = [];
+        let categoriesList = ['All'];
+        let activeCategory = 'All';
+        
+        let editingItemId = null; 
+
+        const BASE_URL = "http://127.0.0.1:8000/api/v1";
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const roleSelect = document.getElementById('role-simulator');
+            if(roleSelect) roleSelect.value = currentRole;
+            applyRBAC();
+            loadMenu();
+        });
+
+        function changeRole() {
+            currentRole = document.getElementById('role-simulator').value;
+            localStorage.setItem('userRole', currentRole);
+            applyRBAC();
+            filterMenu(); 
+        }
+
+        function applyRBAC() {
+            document.querySelectorAll('.rbac-nav').forEach(nav => {
+                const allowedRoles = nav.getAttribute('data-allowed').split(',');
+                if (allowedRoles.includes(currentRole)) nav.style.display = 'flex';
+                else nav.style.display = 'none';
+            });
+            
+            const currentPage = window.location.pathname.split('/').pop() || 'menu.html';
+            const currentNav = document.querySelector(`.rbac-nav[href="${currentPage}"]`);
+            if (currentNav && !currentNav.getAttribute('data-allowed').includes(currentRole)) {
+                alert(`⛔ SECURITY ALERT: Role [${currentRole.toUpperCase()}] is not authorized to access this page!`);
+                window.location.href = "dashboard.html"; 
+            }
+        }
+
+        async function loadMenu() {
+            try {
+                const nocache = new Date().getTime();
+                const response = await fetch(`${BASE_URL}/menu/?t=${nocache}`);
+                
+                if(!response.ok) throw new Error("API Fails");
+                
+                let data = await response.json();
+                
+                allMenuItems = data.map(item => ({ 
+                    id: item.id || item.DishID,
+                    name: item.name || item.DishName,
+                    price: parseFloat(item.price || item.Price) || 0,
+                    category: (item.category || item.CategoryName || 'Uncategorized').trim(),
+                    description: item.description || item.Description,
+                    prep_time: item.prep_time || item.PreparationTime || item.PrepTime || 15,
+                    is_available: (item.is_available == 1 || item.is_available == true || item.IsAvailable == 1),
+                    isEditingPrice: false 
+                }));
+                allMenuItems.sort((a, b) => a.id - b.id);
+
+                document.getElementById('api-status').innerHTML = `<span class="text-green-500 font-bold"><i class="fas fa-check-circle mr-1"></i> Database Connected (${allMenuItems.length} items)</span>`;
+                
+                extractCategories();
+                renderCategoryPills();
+                filterMenu();
+
+            } catch (error) {
+                console.warn("⚠️ Cannot connect to Backend.");
+                document.getElementById('api-status').innerHTML = `<span class="text-red-500 font-bold"><i class="fas fa-exclamation-circle mr-1"></i> Backend Offline</span>`;
+            }
+        }
+
+        function extractCategories() {
+            const uniqueCats = new Set(allMenuItems.map(item => item.category || 'Others'));
+            categoriesList = ['All', ...Array.from(uniqueCats)];
+        }
+
+        function renderCategoryPills() {
+            const container = document.getElementById('category-filter-container');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            categoriesList.forEach(cat => {
+                const isActive = cat === activeCategory;
+                const btnClass = isActive 
+                    ? "bg-slate-800 text-white font-bold shadow-md" 
+                    : "bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 border border-slate-200";
+                
+                const label = cat === 'All' ? 'All Items' : cat;
+                container.innerHTML += `<button onclick="setCategory('${cat}')" class="px-4 py-1.5 rounded-full whitespace-nowrap transition-all text-xs ${btnClass}">${label}</button>`;
+            });
+        }
+
+        function setCategory(cat) {
+            activeCategory = cat;
+            renderCategoryPills();
+            filterMenu();
+        }
+
+        function filterMenu() {
+            const keyword = document.getElementById('menu-search-box').value.toLowerCase();
+            
+            const filteredData = allMenuItems.filter(item => {
+                const matchCat = activeCategory === 'All' || (item.category || 'Others') === activeCategory;
+                const matchName = item.name.toLowerCase().includes(keyword);
+                return matchCat && matchName;
+            });
+            
+            renderMenu(filteredData);
+        }
+
+        function renderMenu(items) {
+            const tbody = document.getElementById('menu-list');
+            tbody.innerHTML = '';
+            
+            const canEditPrice = currentRole === 'admin' || currentRole === 'manager';
+            const canToggleStatus = currentRole === 'admin' || currentRole === 'manager' || currentRole === 'chef';
+            const canManageItems = currentRole === 'admin' || currentRole === 'manager';
+
+            if (items.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400 italic font-medium">No items found matching your search...</td></tr>`;
+                return;
+            }
+
+            items.forEach(item => {
+                const isAvailable = item.is_available === 1 || item.is_available === true;
+                
+                const statusBadge = isAvailable 
+                    ? `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase"><i class="fas fa-check mr-1"></i> In Stock</span>`
+                    : `<span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase"><i class="fas fa-ban mr-1"></i> Out of Stock</span>`;
+                
+                const rowClass = isAvailable ? "hover:bg-slate-50/50" : "bg-slate-50/50 opacity-70";
+                const toggleIcon = isAvailable ? "fa-toggle-on text-green-500" : "fa-toggle-off text-slate-400";
+                const toggleTitle = isAvailable ? "Click to mark Out of Stock" : "Click to mark In Stock";
+
+                const desc = item.description || "No description available for this item.";
+                const prepTime = item.prep_time || item.PreparationTime || 15;
+
+                let priceArea = '';
+                if (item.isEditingPrice && canEditPrice) {
+                    priceArea = `
+                        <div class="flex items-center justify-end gap-1">
+                            <input type="number" id="price-input-${item.id}" value="${item.price}" class="w-24 text-right bg-white border border-blue-300 rounded px-2 py-1 text-xs text-blue-700 outline-none focus:ring-1 focus:ring-blue-500 font-bold shadow-inner" onkeypress="if(event.key === 'Enter') saveInlinePrice(${item.id})">
+                            <button onclick="saveInlinePrice(${item.id})" class="bg-blue-500 hover:bg-blue-600 text-white w-6 h-6 rounded flex items-center justify-center transition" title="Save">
+                                <i class="fas fa-check text-[10px]"></i>
+                            </button>
+                            <button onclick="toggleEditPrice(${item.id})" class="bg-slate-200 hover:bg-slate-300 text-slate-600 w-6 h-6 rounded flex items-center justify-center transition" title="Cancel">
+                                <i class="fas fa-times text-[10px]"></i>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    priceArea = `
+                        <div class="flex items-center justify-end gap-2 group">
+                            <span class="font-black text-blue-600">${item.price.toLocaleString('vi-VN')} đ</span>
+                            ${canEditPrice ? `
+                            <button onclick="toggleEditPrice(${item.id})" class="text-slate-300 hover:text-blue-600 transition opacity-0 group-hover:opacity-100 bg-white shadow-sm border border-slate-100 w-6 h-6 rounded flex items-center justify-center" title="Quick edit price">
+                                <i class="fas fa-pen text-[10px]"></i>
+                            </button>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+
+                let actionColumn = '';
+                if (canManageItems || canToggleStatus) {
+                    actionColumn = `
+                        <td class="py-4 text-right pr-6">
+                            <div class="flex items-center justify-end gap-3">
+                                ${canToggleStatus ? `
+                                <button onclick="toggleStatus(${item.id}, ${isAvailable})" class="text-2xl align-middle hover:scale-110 transition-transform shadow-sm rounded-full text-slate-300 hover:text-slate-500" title="${toggleTitle}">
+                                    <i class="fas ${toggleIcon}"></i>
+                                </button>
+                                ` : ''}
+
+                                ${canManageItems ? `
+                                <button onclick="openEditModal(${item.id})" class="text-lg text-blue-400 hover:text-blue-600 hover:scale-110 transition" title="Edit Item">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="deleteItem(${item.id})" class="text-lg text-red-400 hover:text-red-600 hover:scale-110 transition" title="Delete Item">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                                ` : ''}
+                            </div>
+                        </td>
+                    `;
+                } else {
+                    actionColumn = `<td class="py-4 text-right pr-6 text-xs text-slate-300 italic">View Only</td>`;
+                }
+
+                tbody.innerHTML += `
+                    <tr class="border-b border-slate-50 transition ${rowClass}">
+                        <td class="py-4 pl-6 font-mono font-bold text-slate-400">#${item.id}</td>
+                        <td class="py-4 pr-4">
+                            <p class="font-bold text-slate-700 text-sm mb-0.5">${item.name}</p>
+                            <p class="text-[11px] text-slate-400 line-clamp-1 italic" title="${desc}">
+                                <i class="fas fa-info-circle mr-1 text-slate-300"></i>${desc}
+                            </p>
+                        </td>
+                        <td class="py-4">
+                            <span class="px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold">${item.category || 'Others'}</span>
+                        </td>
+                        <td class="py-4 text-right pr-4">${priceArea}</td>
+                        <td class="py-4 text-center">
+                            <span class="bg-orange-50 border border-orange-100 text-orange-600 px-2 py-1 rounded text-xs font-bold font-mono">
+                                <i class="fas fa-clock mr-1"></i> ${prepTime}m
+                            </span>
+                        </td>
+                        <td class="py-4 text-center">${statusBadge}</td>
+                        ${actionColumn}
+                    </tr>
+                `;
+            });
+        }
+
+        function toggleEditPrice(id) {
+            const item = allMenuItems.find(i => i.id === id);
+            if (item) {
+                item.isEditingPrice = !item.isEditingPrice;
+                filterMenu(); 
+                if (item.isEditingPrice) {
+                    setTimeout(() => {
+                        const input = document.getElementById(`price-input-${id}`);
+                        if(input) { input.focus(); input.select(); }
+                    }, 50);
+                }
+            }
+        }
+
+        async function saveInlinePrice(id) {
+            const item = allMenuItems.find(i => i.id === id);
+            const input = document.getElementById(`price-input-${id}`);
+            if (item && input) {
+                const newPrice = parseFloat(input.value);
+                if (!isNaN(newPrice) && newPrice > 0) {
+                    try {
+                        const response = await fetch(`${BASE_URL}/menu/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ price: newPrice })
+                        });
+                        
+                        if(response.ok) {
+                            item.price = newPrice;
+                            item.isEditingPrice = false;
+                            filterMenu();
+                        } else {
+                            alert("Cannot save price to DB");
+                        }
+                    } catch (e) {
+                        alert("Connection error when saving price!");
+                    }
+                }
+            }
+        }
+
+        async function toggleStatus(id, currentStatus) {
+            const newStatus = currentStatus ? 0 : 1;
+            const item = allMenuItems.find(i => i.id === id);
+            
+            if(item) {
+                try {
+                    const response = await fetch(`${BASE_URL}/menu/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ is_available: newStatus, IsAvailable: newStatus }) 
+                    });
+
+                    if(response.ok) {
+                        item.is_available = newStatus;
+                        filterMenu(); 
+                    } else {
+                        const err = await response.json();
+                        alert("Cannot update status in DB: " + (err.detail || 'Unknown error'));
+                    }
+                } catch(e) {
+                    alert("Connection error when toggling item!");
+                }
+            }
+        }
+
+        // ĐÃ FIX: Load danh mục động cho bảng Thêm/Sửa
+        function populateCategoryDropdown() {
+            const select = document.getElementById('new-category');
+            select.innerHTML = '';
+            categoriesList.forEach(cat => {
+                if(cat !== 'All') {
+                    select.innerHTML += `<option value="${cat}">${cat}</option>`;
+                }
+            });
+        }
+
+        function openAddModal() {
+            if (currentRole !== 'admin' && currentRole !== 'manager') {
+                return alert("You do not have permission to add new items!");
+            }
+            editingItemId = null;
+            document.getElementById('modal-title').innerHTML = '<i class="fas fa-utensils text-blue-400"></i> Add New Dish';
+            document.getElementById('save-btn-text').innerText = 'Save Item to Database';
+
+            document.getElementById('new-name').value = '';
+            document.getElementById('new-price').value = '';
+            document.getElementById('new-preptime').value = '15';
+            document.getElementById('new-desc').value = '';
+            document.getElementById('new-status').checked = true;
+            document.getElementById('custom-category').value = '';
+            
+            populateCategoryDropdown();
+            
+            document.getElementById('add-menu-modal').classList.remove('hidden');
+        }
+
+        function openEditModal(id) {
+            const item = allMenuItems.find(i => i.id === id);
+            if (!item) return;
+
+            editingItemId = id;
+            document.getElementById('modal-title').innerHTML = `<i class="fas fa-edit text-blue-400"></i> Edit Dish #${id}`;
+            document.getElementById('save-btn-text').innerText = 'Update Item';
+
+            document.getElementById('new-name').value = item.name;
+            document.getElementById('new-price').value = item.price;
+            document.getElementById('new-preptime').value = item.prep_time;
+            document.getElementById('new-desc').value = item.description;
+            document.getElementById('new-status').checked = item.is_available;
+            document.getElementById('custom-category').value = '';
+
+            populateCategoryDropdown();
+            
+            // Nếu danh mục của món ăn này đã có sẵn thì chọn nó
+            let select = document.getElementById('new-category');
+            let optionExists = Array.from(select.options).some(opt => opt.value === item.category);
+            if(optionExists) {
+                select.value = item.category;
+            } else {
+                select.innerHTML += `<option value="${item.category}" selected>${item.category}</option>`;
+            }
+
+            document.getElementById('add-menu-modal').classList.remove('hidden');
+        }
+
+        function closeAddModal() {
+            document.getElementById('add-menu-modal').classList.add('hidden');
+        }
+
+        async function saveItem() {
+            const name = document.getElementById('new-name').value;
+            const price = parseFloat(document.getElementById('new-price').value);
+            const prepTime = parseInt(document.getElementById('new-preptime').value) || 15;
+            const desc = document.getElementById('new-desc').value;
+            const isAvailable = document.getElementById('new-status').checked ? 1 : 0;
+
+            // Xử lý danh mục: Ưu tiên lấy từ ô Custom trước, nếu trống thì lấy từ Select
+            const customCat = document.getElementById('custom-category').value.trim();
+            const selectCat = document.getElementById('new-category').value;
+            const finalCategory = customCat ? customCat : selectCat;
+
+            if(!name || isNaN(price) || price <= 0 || !finalCategory) {
+                return alert("Please enter a valid Dish Name, Category and Price (> 0)!");
+            }
+
+            const payload = {
+                name: name,
+                category: finalCategory,
+                price: price,
+                description: desc,
+                prep_time: prepTime,
+                is_available: isAvailable
+            };
+
+            try {
+                const method = editingItemId ? 'PUT' : 'POST';
+                const url = editingItemId ? `${BASE_URL}/menu/${editingItemId}` : `${BASE_URL}/menu/`;
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if(response.ok) {
+                    alert(editingItemId ? `🎉 Successfully updated item!` : `🎉 Successfully added item: ${name}!`);
+                    closeAddModal();
+                    loadMenu(); 
+                } else {
+                    const err = await response.json();
+                    alert("Database Error: " + (err.detail || "Unknown error"));
+                }
+            } catch (e) {
+                alert("Network error!");
+            }
+        }
+
+        async function deleteItem(id) {
+            if(!confirm("⚠️ WARNING: Are you sure you want to PERMANENTLY delete this dish?\n\nTip: If this dish was ordered in the past, the database will prevent deletion to protect revenue history. In that case, please mark it as 'Out of Stock' instead.")) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/menu/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if(response.ok) {
+                    alert("🗑️ Item deleted successfully!");
+                    loadMenu();
+                } else {
+                    const err = await response.json();
+                    alert("❌ Cannot delete item:\n" + (err.detail || "Database Constraint Error"));
+                }
+            } catch(e) {
+                alert("Network error while trying to delete item!");
+            }
+        }
+
+    </script>
+</body>
+</html>

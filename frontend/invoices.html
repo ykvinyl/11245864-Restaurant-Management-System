@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice History - RMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .receipt-container {
+            background-image: radial-gradient(circle at 10px 0, transparent 10px, white 11px);
+            background-size: 20px 100%;
+            background-repeat: repeat-x;
+            background-position: top;
+            border-top: 10px solid transparent;
+        }
+        .receipt-container::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 0;
+            width: 100%;
+            height: 10px;
+            background-image: radial-gradient(circle at 10px 10px, white 10px, transparent 11px);
+            background-size: 20px 100%;
+            background-repeat: repeat-x;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 flex h-screen overflow-hidden">
+
+    <div class="w-72 bg-slate-900 min-h-screen text-white p-6 sticky top-0 shadow-xl flex flex-col z-20">
+        <div class="flex items-center gap-4 mb-8 px-2">
+            <div class="bg-blue-500 p-3 rounded-xl shadow-lg">
+                <i class="fas fa-utensils text-2xl text-white"></i>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold tracking-tight">RMS Pro</h2>
+                <p class="text-xs text-slate-400">Enterprise Edition</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 p-4 rounded-xl mb-8 border border-slate-700">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2"><i class="fas fa-user-shield mr-1"></i> Role Simulator</label>
+            <select id="role-simulator" onchange="changeRole()" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white font-bold outline-none focus:border-blue-500 transition cursor-pointer">
+                <option value="admin">Admin (Full Access)</option>
+                <option value="manager">Manager</option>
+                <option value="cashier">Cashier</option>
+                <option value="waiter">Waiter</option>
+                <option value="chef">Chef</option>
+            </select>
+        </div>
+
+        <nav class="space-y-2 flex-1" id="main-nav">
+            <a href="dashboard.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager">
+                <i class="fas fa-chart-line w-5"></i> Dashboard
+            </a>
+            <a href="customers.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-users w-5"></i> Customers
+            </a>
+            <a href="tables.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,waiter,cashier">
+                <i class="fas fa-th-large w-5"></i> Table Map
+            </a>
+            <a href="pos.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter">
+                <i class="fas fa-shopping-cart w-5"></i> Point of Sale
+            </a>
+            <a href="invoices.html" class="rbac-nav flex items-center gap-3 p-3 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30" data-allowed="admin,manager,cashier">
+                <i class="fas fa-file-invoice-dollar w-5"></i> Invoice History
+            </a>
+            <a href="menu.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter,chef">
+                <i class="fas fa-list w-5"></i> Menu & Inventory
+            </a>
+        </nav>
+    </div>
+
+    <div class="flex-1 p-8 overflow-y-auto relative">
+        <header class="flex justify-between items-end mb-8">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800">Invoice History</h1>
+                <p class="text-slate-500 mt-1" id="api-status"><i class="fas fa-circle-notch fa-spin mr-1"></i> Syncing with Database...</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="relative w-64">
+                    <i class="fas fa-search absolute left-4 top-3 text-slate-400"></i>
+                    <input type="text" id="search-box" oninput="filterInvoices()" placeholder="Search by ID or Customer..." class="w-full bg-white border border-slate-200 shadow-sm rounded-xl py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-blue-500 outline-none font-medium">
+                </div>
+            </div>
+        </header>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-xs font-black text-slate-500 uppercase tracking-widest">
+                            <th class="p-5">Invoice ID</th>
+                            <th class="p-5">Date</th>
+                            <th class="p-5">Table & Customer</th>
+                            <th class="p-5">Payment Method</th>
+                            <th class="p-5">Total Amount</th>
+                            <th class="p-5">Status</th>
+                            <th class="p-5 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoice-table-body" class="divide-y divide-slate-100 text-sm">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="receipt-modal" onclick="closeModal()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4 overflow-y-auto">
+        
+        <div onclick="event.stopPropagation()" class="w-full max-w-md relative my-8">
+            
+            <div class="receipt-container bg-white rounded-lg shadow-2xl p-8 relative">
+                
+                <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition text-2xl">
+                    <i class="fas fa-times"></i>
+                </button>
+                
+                <div class="text-center border-b-2 border-dashed border-slate-200 pb-6 mb-6 mt-4">
+                    <h2 class="text-2xl font-black text-slate-800 tracking-tighter">RMS RESTAURANT</h2>
+                    <p class="text-slate-500 text-xs mt-1">207 Giai Phong, Hai Ba Trung, Hanoi</p>
+                    <p class="text-slate-500 text-xs mt-1">Tel: (024) 3869 5611</p>
+                    <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between text-xs font-bold text-slate-600">
+                        <div class="text-left">
+                            <p>Receipt #: <span id="rec-id" class="text-slate-800">--</span></p>
+                            <p>Table: <span id="rec-table" class="text-slate-800">--</span></p>
+                        </div>
+                        <div class="text-right">
+                            <p>Date: <span id="rec-date" class="font-mono text-[10px]">--</span></p>
+                            <p>Customer: <span id="rec-customer" class="text-slate-800">--</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6 max-h-64 overflow-y-auto pr-2 no-scrollbar">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-xs text-slate-400 border-b border-slate-200">
+                                <th class="text-left font-bold pb-2">Item</th>
+                                <th class="text-center font-bold pb-2 w-12">Qty</th>
+                                <th class="text-right font-bold pb-2 w-24">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rec-items" class="text-slate-700 font-medium">
+                            </tbody>
+                    </table>
+                </div>
+
+                <div class="border-t-2 border-dashed border-slate-200 pt-4 space-y-2 mb-6">
+                    <div class="flex justify-between text-sm text-slate-500">
+                        <span>Subtotal</span>
+                        <span id="rec-subtotal" class="font-bold text-slate-800">0 VND</span>
+                    </div>
+                    <div class="flex justify-between text-sm text-slate-500">
+                        <span>Service Charge</span>
+                        <span id="rec-service" class="font-bold text-slate-800">0 VND</span>
+                    </div>
+                    <div class="flex justify-between text-sm text-red-500">
+                        <span>Discount</span>
+                        <span id="rec-discount" class="font-bold">-0 VND</span>
+                    </div>
+                    <div class="flex justify-between text-sm text-slate-500">
+                        <span>Tax (8%)</span>
+                        <span id="rec-tax" class="font-bold text-slate-800">0 VND</span>
+                    </div>
+                    <div class="flex justify-between items-center text-lg font-black text-slate-800 mt-2 pt-2 border-t border-slate-100">
+                        <span>TOTAL</span>
+                        <span id="rec-total" class="text-2xl text-blue-600">0 VND</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Payment Details</p>
+                    <div id="rec-payments" class="space-y-2 border-b border-slate-200 pb-3 mb-3">
+                        </div>
+                    
+                    <div class="space-y-1 text-xs font-bold">
+                        <div class="flex justify-between text-slate-600">
+                            <span>Customer Paid:</span>
+                            <span id="rec-paid">0 VND</span>
+                        </div>
+                        <div class="flex justify-between text-green-600 bg-green-50 p-1.5 rounded shadow-sm border border-green-100">
+                            <span>Change Return:</span>
+                            <span id="rec-change">0 VND</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8 text-center text-xs text-slate-400">
+                    <p class="font-bold italic">Thank you for dining with us!</p>
+                    <p class="mt-1 font-mono text-[9px] opacity-50">Powered by RMS Pro</p>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = localStorage.getItem('userRole') || 'admin';
+        let allInvoices = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const roleSelect = document.getElementById('role-simulator');
+            if(roleSelect) roleSelect.value = currentRole;
+            applyRBAC();
+            fetchInvoices();
+        });
+
+        function changeRole() {
+            currentRole = document.getElementById('role-simulator').value;
+            localStorage.setItem('userRole', currentRole);
+            applyRBAC();
+        }
+
+        function applyRBAC() {
+            document.querySelectorAll('.rbac-nav').forEach(nav => {
+                const allowedRoles = nav.getAttribute('data-allowed').split(',');
+                if (allowedRoles.includes(currentRole)) nav.style.display = 'flex';
+                else nav.style.display = 'none';
+            });
+            
+            const allowedRoles = ['admin', 'manager', 'cashier'];
+            if (!allowedRoles.includes(currentRole)) {
+                alert("ACCESS DENIED: Role not authorized for Invoice History!");
+                window.location.href = "dashboard.html";
+            }
+        }
+
+        async function fetchInvoices() {
+            try {
+                const nocache = new Date().getTime();
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/invoices/?t=${nocache}`);
+                if (!response.ok) throw new Error("Network Error");
+                
+                allInvoices = await response.json();
+                document.getElementById('api-status').innerHTML = `<span class="text-green-500 font-bold"><i class="fas fa-check-circle mr-1"></i> Live DB Connected</span>`;
+                renderInvoices(allInvoices);
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                document.getElementById('api-status').innerHTML = `<span class="text-red-500 font-bold"><i class="fas fa-exclamation-circle mr-1"></i> Offline Mode</span>`;
+                document.getElementById('invoice-table-body').innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-400 italic">Could not connect to database.</td></tr>`;
+            }
+        }
+
+        function filterInvoices() {
+            const keyword = document.getElementById('search-box').value.toLowerCase();
+            const filtered = allInvoices.filter(inv => 
+                inv.id.toString().includes(keyword) || 
+                (inv.customer && inv.customer.toLowerCase().includes(keyword))
+            );
+            renderInvoices(filtered);
+        }
+
+        function renderInvoices(data) {
+            const tbody = document.getElementById('invoice-table-body');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-400 italic">No invoices found.</td></tr>`;
+                return;
+            }
+
+            data.forEach(inv => {
+                let payHtml = '';
+                let methods = [];
+
+                // ĐÃ FIX: Nhận diện bất chấp Backend viết hoa hay thường
+                if (inv.payments && inv.payments.length > 0) {
+                    methods = inv.payments.map(p => (p.PaymentMethod || p.method || p.Method || 'cash').toLowerCase());
+                } 
+                else if (inv.primary_method) {
+                    methods = inv.primary_method.split(',').map(m => m.trim().toLowerCase());
+                } 
+                else if (inv.PaymentMethod) {
+                    methods = [inv.PaymentMethod.toLowerCase()];
+                }
+                else {
+                    methods = ['cash'];
+                }
+
+                methods = [...new Set(methods)]; 
+
+                if (methods.length > 1) {
+                    payHtml = `<div class="flex gap-1 flex-wrap">`;
+                    methods.forEach(m => {
+                        let color = "bg-green-100 text-green-700"; let icon = "fa-money-bill-wave"; let label = "Cash";
+                        if (m === 'card') { color = "bg-blue-100 text-blue-700"; icon = "fa-credit-card"; label = "Card"; }
+                        if (m === 'bank_transfer' || m === 'transfer') { color = "bg-purple-100 text-purple-700"; icon = "fa-mobile-alt"; label = "Transfer"; }
+                        if (m === 'ewallet') { color = "bg-pink-100 text-pink-700"; icon = "fa-wallet"; label = "E-Wallet"; }
+                        payHtml += `<span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${color}" title="${label}"><i class="fas ${icon}"></i> ${label}</span>`;
+                    });
+                    payHtml += `</div>`;
+                } else {
+                    let m = methods[0];
+                    let color = "bg-green-100 text-green-700"; let icon = "fa-money-bill-wave"; let label = "Cash";
+                    if (m === 'card') { color = "bg-blue-100 text-blue-700"; icon = "fa-credit-card"; label = "Card"; }
+                    if (m === 'bank_transfer' || m === 'transfer') { color = "bg-purple-100 text-purple-700"; icon = "fa-mobile-alt"; label = "Transfer"; }
+                    if (m === 'ewallet') { color = "bg-pink-100 text-pink-700"; icon = "fa-wallet"; label = "E-Wallet"; }
+                    payHtml = `<span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${color}"><i class="fas ${icon} mr-1"></i> ${label}</span>`;
+                }
+
+                let statusColor = "bg-green-100 text-green-700 border-green-200";
+                if (inv.status.toLowerCase() !== 'paid') statusColor = "bg-red-100 text-red-700 border-red-200";
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-blue-50/50 transition cursor-pointer" onclick="openReceipt(${inv.id})">
+                        <td class="p-5 font-mono font-bold text-slate-700">INV-${inv.id}</td>
+                        <td class="p-5 font-medium text-slate-500">${inv.date}</td>
+                        <td class="p-5">
+                            <p class="font-bold text-slate-800">${inv.customer || 'Walk-in Guest'}</p>
+                            <p class="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Table ${inv.table_id}</p>
+                        </td>
+                        <td class="p-5">
+                            ${payHtml}
+                        </td>
+                        <td class="p-5 font-black text-blue-600">${inv.total.toLocaleString('vi-VN')} VND</td>
+                        <td class="p-5">
+                            <span class="px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-wider border ${statusColor}">
+                                ${inv.status}
+                            </span>
+                        </td>
+                        <td class="p-5 text-center">
+                            <button class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-blue-600 hover:text-white transition shadow-sm">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function openReceipt(id) {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/invoices/${id}`);
+                if (!response.ok) throw new Error("Could not fetch receipt details");
+                
+                const data = await response.json();
+                const info = data.info;
+                const items = data.items;
+                const payments = data.payments;
+
+                document.getElementById('rec-id').innerText = `INV-${info.InvoiceID}`;
+                document.getElementById('rec-table').innerText = info.TableID;
+                document.getElementById('rec-date').innerText = info.PaymentDate;
+                document.getElementById('rec-customer').innerText = info.CustomerName || 'Walk-in Guest';
+
+                const itemContainer = document.getElementById('rec-items');
+                itemContainer.innerHTML = '';
+                items.forEach(item => {
+                    itemContainer.innerHTML += `
+                        <tr>
+                            <td class="py-2 pr-2 leading-tight">${item.name}</td>
+                            <td class="py-2 text-center text-slate-500">x${item.qty}</td>
+                            <td class="py-2 text-right font-bold">${item.line_total.toLocaleString('vi-VN')}</td>
+                        </tr>
+                    `;
+                });
+
+                document.getElementById('rec-subtotal').innerText = `${info.SubTotal.toLocaleString('vi-VN')} VND`;
+                document.getElementById('rec-service').innerText = `${info.ServiceCharge.toLocaleString('vi-VN')} VND`;
+                document.getElementById('rec-discount').innerText = `-${info.DiscountAmount.toLocaleString('vi-VN')} VND`;
+                document.getElementById('rec-tax').innerText = `${info.TaxAmount.toLocaleString('vi-VN')} VND`;
+                document.getElementById('rec-total').innerText = `${info.TotalAmount.toLocaleString('vi-VN')} VND`;
+
+                const payContainer = document.getElementById('rec-payments');
+                payContainer.innerHTML = '';
+                
+                let totalPaid = 0;
+
+                // ĐÃ FIX: Tự động cộng tổng dù DB có chuẩn hay lỗi
+                if (payments && payments.length > 0) {
+                    payments.forEach(p => {
+                        const m = (p.PaymentMethod || p.method || p.Method || 'cash').toLowerCase();
+                        let icon = "fa-money-bill-wave"; let color = "text-green-500"; let label = "Cash";
+                        if (m === 'card') { icon = "fa-credit-card"; color = "text-blue-500"; label = "Card"; }
+                        if (m === 'bank_transfer' || m === 'transfer') { icon = "fa-mobile-alt"; color = "text-purple-500"; label = "Transfer"; }
+                        if (m === 'ewallet') { icon = "fa-wallet"; color = "text-pink-500"; label = "E-Wallet"; }
+                        
+                        const amt = parseFloat(p.Amount || p.amount) || 0;
+                        totalPaid += amt;
+
+                        payContainer.innerHTML += `
+                            <div class="flex justify-between items-center text-xs font-bold text-slate-700">
+                                <span class="uppercase"><i class="fas ${icon} w-4 ${color}"></i> ${label}</span>
+                                <span>${amt.toLocaleString('vi-VN')} VND</span>
+                            </div>
+                        `;
+                    });
+                } else {
+                    const fallbackAmt = parseFloat(info.TotalAmount) || 0;
+                    totalPaid = fallbackAmt;
+                    const fallbackMethod = info.PaymentMethod || info.primary_method || 'Cash';
+                    
+                    payContainer.innerHTML = `
+                        <div class="flex justify-between items-center text-xs font-bold text-slate-700">
+                            <span class="uppercase"><i class="fas fa-money-bill-wave w-4 text-green-500"></i> ${fallbackMethod}</span>
+                            <span>${fallbackAmt.toLocaleString('vi-VN')} VND</span>
+                        </div>
+                    `;
+                }
+
+                // ĐÃ FIX: In ra thông số tiền trả và tiền thối an toàn
+                const change = totalPaid - parseFloat(info.TotalAmount);
+                document.getElementById('rec-paid').innerText = `${totalPaid.toLocaleString('vi-VN')} VND`;
+                document.getElementById('rec-change').innerText = `${Math.max(0, change).toLocaleString('vi-VN')} VND`;
+
+                document.getElementById('receipt-modal').classList.remove('hidden');
+
+            } catch (error) {
+                alert("Error loading receipt details: " + error.message);
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('receipt-modal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

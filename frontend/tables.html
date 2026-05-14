@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Table Map - RMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .table-container { position: relative; }
+        .table-tooltip {
+            visibility: hidden;
+            position: absolute;
+            z-index: 50;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 220px;
+            background-color: #1e293b;
+            color: white;
+            padding: 14px;
+            border-radius: 16px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+        .table-container:hover .table-tooltip {
+            visibility: visible;
+            opacity: 1;
+            bottom: 125%;
+        }
+        .table-tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -8px;
+            border-width: 8px;
+            border-style: solid;
+            border-color: #1e293b transparent transparent transparent;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 flex h-screen overflow-hidden">
+
+    <div class="w-72 bg-slate-900 min-h-screen text-white p-6 sticky top-0 shadow-xl flex flex-col z-20">
+        <div class="flex items-center gap-4 mb-8 px-2">
+            <div class="bg-blue-500 p-3 rounded-xl shadow-lg">
+                <i class="fas fa-utensils text-2xl text-white"></i>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold tracking-tight">RMS Pro</h2>
+                <p class="text-xs text-slate-400">Enterprise Edition</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 p-4 rounded-xl mb-8 border border-slate-700">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2"><i class="fas fa-user-shield mr-1"></i> Role Simulator</label>
+            <select id="role-simulator" onchange="changeRole()" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white font-bold outline-none focus:border-blue-500 transition cursor-pointer">
+                <option value="admin">Admin (Full Access)</option>
+                <option value="manager">Manager</option>
+                <option value="cashier">Cashier</option>
+                <option value="waiter">Waiter</option>
+                <option value="chef">Chef</option>
+            </select>
+        </div>
+
+        <nav class="space-y-2 flex-1" id="main-nav">
+            <a href="dashboard.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager">
+                <i class="fas fa-chart-line w-5"></i> Dashboard
+            </a>
+            <a href="customers.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-users w-5"></i> Customers
+            </a>
+            <a href="tables.html" class="rbac-nav flex items-center gap-3 p-3 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30" data-allowed="admin,manager,waiter,cashier">
+                <i class="fas fa-th-large w-5"></i> Table Map
+            </a>
+            <a href="pos.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter">
+                <i class="fas fa-shopping-cart w-5"></i> Point of Sale
+            </a>
+            <a href="invoices.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-file-invoice-dollar w-5"></i> Invoice History
+            </a>
+            <a href="menu.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter,chef">
+                <i class="fas fa-list w-5"></i> Menu & Inventory
+            </a>
+        </nav>
+    </div>
+
+    <div class="flex-1 p-8 overflow-y-auto relative">
+        <header class="flex justify-between items-end mb-8">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800">Live Table Map</h1>
+                <p class="text-slate-500 mt-1" id="api-status"><i class="fas fa-circle-notch fa-spin mr-1"></i> Syncing with Database...</p>
+            </div>
+            <div class="flex gap-4">
+                <div class="flex items-center gap-2 text-sm font-bold text-slate-600"><span class="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span> Available</div>
+                <div class="flex items-center gap-2 text-sm font-bold text-slate-600"><span class="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></span> Occupied</div>
+                <div class="flex items-center gap-2 text-sm font-bold text-slate-600"><span class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"></span> Reserved</div>
+            </div>
+        </header>
+
+        <div class="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 min-h-[600px]">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8" id="table-grid">
+                </div>
+        </div>
+    </div>
+
+    <div id="booking-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row transform transition-all relative">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-2xl z-10"><i class="fas fa-times"></i></button>
+            
+            <div class="w-full md:w-[55%] bg-slate-50 p-8 border-r border-slate-200">
+                <div class="mb-6">
+                    <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest" id="modal-table-id">Table --</span>
+                    <h2 class="text-2xl font-black text-slate-800 mt-2">Table Schedule</h2>
+                    <p class="text-sm text-slate-500 mt-1"><i class="fas fa-users mr-1"></i> Capacity: <span id="modal-capacity" class="font-bold text-red-500">--</span> pax</p>
+                </div>
+                <input type="date" id="booking-date" onchange="renderTimeSlots()" class="w-full border border-slate-200 rounded-xl px-4 py-2 mb-6 outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer">
+                
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">
+                    Table: <span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded ml-1">Live Database Schedule</span>
+                </h3>
+                
+                <div id="existing-reservations" class="space-y-4 max-h-[450px] overflow-y-auto no-scrollbar pb-10"></div>
+            </div>
+
+            <div class="w-full md:w-[45%] p-8">
+                <h3 class="text-xl font-bold text-slate-800 mb-6">Manage Table</h3>
+                <div class="space-y-4">
+                    
+                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl relative">
+                        <span class="absolute -top-2.5 left-4 bg-slate-50 px-2 text-[10px] font-black text-blue-500 uppercase tracking-widest">Table Action</span>
+                        <div class="mb-3">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Select Action</label>
+                            <select id="action-status" onchange="toggleTimeInput()" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500 text-sm shadow-sm font-bold text-slate-700 cursor-pointer">
+                                <option value="occupied">Walk-in (Seat Guest)</option>
+                                <option value="reserved">Reservation (Book Time)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Customer / Member</label>
+                            <select id="booking-customer" onchange="autoFillCustomer()" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500 text-sm shadow-sm font-bold text-slate-700 cursor-pointer">
+                                <option value="">Walk-in Guest (Enter details below)</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Guest Name</label>
+                                <input type="text" id="cust-name" placeholder="John Doe" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500 text-sm shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Phone</label>
+                                <input type="text" id="cust-phone" placeholder="0912..." class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500 text-sm shadow-sm">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl relative mt-4">
+                        <span class="absolute -top-2.5 left-4 bg-slate-50 px-2 text-[10px] font-black text-purple-500 uppercase tracking-widest">Table Details</span>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Pax (Max: <span id="label-max-capacity"></span>)</label>
+                                <input type="number" id="cust-count" value="1" min="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-500 text-sm shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">DateTime</label>
+                                <select id="time-selector" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-bold text-sm shadow-sm hidden cursor-pointer"></select>
+                                <div id="walkin-time-display" class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 outline-none text-sm shadow-sm font-bold text-slate-500 cursor-not-allowed text-center">
+                                    <i class="fas fa-bolt text-yellow-500 mr-1"></i> Immediate
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Special Requests</label>
+                            <textarea id="cust-note" rows="2" placeholder="E.g., Window seat, baby chair..." class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-500 text-sm resize-none shadow-sm"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Staff Member</label>
+                            <select id="staff-selector" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-purple-500 font-medium text-sm shadow-sm text-slate-600 cursor-pointer">
+                                <option value="1">Administrator</option>
+                                <option value="2">Huong (Receptionist)</option>
+                                <option value="3">Tuan (Manager)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button onclick="submitReservation()" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 mt-2 transition flex items-center justify-center gap-2">
+                        <i class="fas fa-check-circle"></i> Confirm Action
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = localStorage.getItem('userRole') || 'admin';
+        let allTables = [];
+        let mockReservations = []; 
+        let currentTableId = null;
+        let customersList = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const roleSelect = document.getElementById('role-simulator');
+            if(roleSelect) roleSelect.value = currentRole;
+            
+            const localDate = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+            document.getElementById('booking-date').value = localDate;
+            
+            applyRBAC();
+            fetchCustomers();
+            fetchTableData(); 
+        });
+
+        function changeRole() {
+            currentRole = document.getElementById('role-simulator').value;
+            localStorage.setItem('userRole', currentRole);
+            applyRBAC();
+        }
+
+        function applyRBAC() {
+            document.querySelectorAll('.rbac-nav').forEach(nav => {
+                const allowedRoles = nav.getAttribute('data-allowed').split(',');
+                if (allowedRoles.includes(currentRole)) nav.style.display = 'flex';
+                else nav.style.display = 'none';
+            });
+            
+            const currentPage = window.location.pathname.split('/').pop() || 'tables.html';
+            const currentNav = document.querySelector(`.rbac-nav[href="${currentPage}"]`);
+            if (currentNav && !currentNav.getAttribute('data-allowed').includes(currentRole)) {
+                alert(`SECURITY ALERT: Role [${currentRole.toUpperCase()}] is not authorized!`);
+                window.location.href = "menu.html"; 
+            }
+        }
+
+        async function fetchCustomers() {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/customers/?t=${new Date().getTime()}`);
+                if (response.ok) {
+                    customersList = await response.json();
+                    const selector = document.getElementById('booking-customer');
+                    customersList.forEach(c => {
+                        const option = document.createElement('option');
+                        option.value = c.id || c.CustomerID;
+                        option.text = `${c.name || c.CustomerName} - ${c.phone || c.Phone || 'N/A'}`;
+                        option.dataset.name = c.name || c.CustomerName;
+                        option.dataset.phone = c.phone || c.Phone || '';
+                        selector.appendChild(option);
+                    });
+                }
+            } catch(e) { console.warn("Cannot fetch customers", e); }
+        }
+
+        function autoFillCustomer() {
+            const selector = document.getElementById('booking-customer');
+            const nameInput = document.getElementById('cust-name');
+            const phoneInput = document.getElementById('cust-phone');
+            
+            if (selector.value) {
+                const selectedOption = selector.options[selector.selectedIndex];
+                nameInput.value = selectedOption.dataset.name || '';
+                phoneInput.value = selectedOption.dataset.phone || '';
+            } else {
+                nameInput.value = '';
+                phoneInput.value = '';
+            }
+        }
+
+        async function fetchTableData() {
+            try {
+                const nocache = new Date().getTime();
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/tables/?t=${nocache}`);
+                if (!response.ok) throw new Error("Network Error");
+                
+                allTables = await response.json();
+                
+                mockReservations = [];
+                let savedRes = JSON.parse(localStorage.getItem('tempReservations') || '[]');
+                const selectedDate = document.getElementById('booking-date').value;
+
+                savedRes.filter(r => r.type === 'reserved').forEach(r => mockReservations.push(r));
+
+                allTables.forEach(t => {
+                    const safeStatus = (t.status || 'available').trim().toLowerCase();
+                    
+                    if (safeStatus === 'occupied') {
+                        let occMatch = savedRes.find(r => r.tableId == t.id && r.type === 'occupied');
+                        if (occMatch) {
+                            t.current_customer = occMatch.customerName || t.current_customer;
+                            t.current_time = occMatch.time || t.current_time;
+                        }
+                    } 
+                    
+                    if (safeStatus === 'reserved') {
+                        let todayRes = mockReservations.filter(r => r.tableId == t.id && r.date === selectedDate).sort((a,b) => (a.time||"19:00").localeCompare(b.time||"19:00"));
+                        
+                        if (todayRes.length > 0) {
+                            t.current_customer = todayRes[0].customerName;
+                            t.current_time = todayRes[0].time;
+                        } else {
+                            // FALLBACK THẦN THÁNH: 
+                            // Nếu Database báo Reserved nhưng không có lịch của hôm nay, BUỘC phải đẻ ra 1 thẻ để user có thể click Xóa
+                            mockReservations.push({
+                                resId: "DB-" + t.id,
+                                tableId: t.id,
+                                customerId: null,
+                                date: selectedDate,
+                                time: t.current_time || "19:00",
+                                customerName: t.current_customer || "Reserved Guest (From DB)",
+                                phone: "N/A",
+                                count: t.capacity,
+                                note: "Auto-synced from live Database",
+                                status: 'Confirmed',
+                                staffName: 'System',
+                                type: 'reserved',
+                                createdAt: new Date().toLocaleString()
+                            });
+                            t.current_customer = t.current_customer || "Reserved Guest (From DB)";
+                            t.current_time = t.current_time || "19:00";
+                        }
+                    }
+                });
+
+                document.getElementById('api-status').innerHTML = `<span class="text-green-500 font-bold"><i class="fas fa-check-circle mr-1"></i> Live Data Synced</span>`;
+                renderTables();
+                
+                if (currentTableId) renderTimeSlots();
+            } catch (error) {
+                console.error("API Error:", error);
+                document.getElementById('api-status').innerHTML = `<span class="text-red-500 font-bold"><i class="fas fa-exclamation-circle mr-1"></i> Offline Mode</span>`;
+            }
+        }
+
+        function renderTables() {
+            const grid = document.getElementById('table-grid');
+            grid.innerHTML = '';
+
+            allTables.forEach((t, index) => {
+                const displayNum = index + 1; 
+                const safeStatus = (t.status || 'available').trim().toLowerCase();
+                
+                let colorClass = 'bg-green-500 shadow-green-500/30';
+                let statusLabel = 'Available';
+                if(safeStatus === 'occupied') { colorClass = 'bg-red-500 shadow-red-500/30'; statusLabel = 'Occupied'; }
+                if(safeStatus === 'reserved') { colorClass = 'bg-blue-500 shadow-blue-500/30'; statusLabel = 'Reserved'; }
+
+                let guestName = '-';
+                let displayTime = '-';
+                let billTotal = '-';
+
+                if (safeStatus === 'occupied') {
+                    guestName = t.current_customer ? t.current_customer : 'Walk-in Guest';
+                    displayTime = t.current_time ? t.current_time : '--:--';
+                    const totalNum = parseFloat(t.current_total) || 0;
+                    billTotal = totalNum > 0 ? totalNum.toLocaleString('vi-VN') + ' VND' : 'Ordering...';
+                } else if (safeStatus === 'reserved') {
+                    guestName = t.current_customer ? t.current_customer : 'Upcoming Guest';
+                    displayTime = t.current_time ? t.current_time : '19:00';
+                    billTotal = '-'; 
+                }
+
+                const locationName = t.location || 'Dining Area';
+
+                grid.innerHTML += `
+                    <div class="table-container">
+                        <div onclick="openModal(${t.id}, ${displayNum})" class="${colorClass} h-36 rounded-[32px] flex flex-col items-center justify-center text-white font-bold shadow-xl cursor-pointer transition-all hover:scale-105 relative overflow-hidden border-2 border-white/20">
+                            <span class="text-[10px] uppercase opacity-70 tracking-[0.2em] mb-1">Table</span>
+                            <span class="text-5xl drop-shadow-md mb-1">${displayNum}</span>
+                            <span class="text-[10px] bg-black/20 px-3 py-1 rounded-full font-bold shadow-inner">${statusLabel}</span>
+                        </div>
+                        <div class="table-tooltip text-left">
+                            <div class="flex justify-between border-b border-slate-700 pb-2 mb-2">
+                                <span class="font-black text-blue-400 text-[10px] uppercase">Table ${displayNum} Info</span>
+                                <span class="bg-slate-700 px-2 py-0.5 rounded text-[9px] shadow-sm">${t.capacity} Seats</span>
+                            </div>
+                            <div class="space-y-2 text-[11px]">
+                                <div class="flex justify-between"><span class="text-slate-400">Location:</span><span class="font-bold text-white">${locationName}</span></div>
+                                <div class="flex justify-between"><span class="text-slate-400">Time:</span><span class="font-bold text-yellow-300">${displayTime}</span></div>
+                                <div class="flex justify-between"><span class="text-slate-400">Guest:</span><span class="font-bold text-orange-300">${guestName}</span></div>
+                                ${safeStatus === 'occupied' ? `
+                                <div class="flex justify-between border-t border-slate-700 pt-2 mt-1">
+                                    <span class="text-slate-400 uppercase font-black text-[9px]">Live Bill:</span>
+                                    <span class="font-black text-green-400 text-sm">${billTotal}</span>
+                                </div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function toggleTimeInput() {
+            const action = document.getElementById('action-status').value;
+            if (action === 'occupied') {
+                document.getElementById('time-selector').classList.add('hidden');
+                document.getElementById('walkin-time-display').classList.remove('hidden');
+            } else {
+                document.getElementById('time-selector').classList.remove('hidden');
+                document.getElementById('walkin-time-display').classList.add('hidden');
+            }
+        }
+
+        function openModal(dbId, displayNum) {
+            currentTableId = dbId;
+            const table = allTables.find(t => t.id == dbId) || {capacity: 2};
+            document.getElementById('modal-table-id').innerText = `Table ${displayNum}`;
+            document.getElementById('modal-capacity').innerText = table.capacity;
+            const countInput = document.getElementById('cust-count');
+            countInput.max = table.capacity;
+            countInput.value = Math.min(1, table.capacity);
+            document.getElementById('label-max-capacity').innerText = table.capacity;
+            
+            document.getElementById('booking-customer').value = '';
+            document.getElementById('cust-name').value = '';
+            document.getElementById('cust-phone').value = '';
+            document.getElementById('cust-note').value = '';
+            document.getElementById('action-status').value = 'occupied'; 
+            
+            toggleTimeInput();
+            renderTimeSlots();
+            document.getElementById('booking-modal').classList.remove('hidden');
+        }
+
+        function renderTimeSlots() {
+            try {
+                const selectedDate = document.getElementById('booking-date').value;
+                const listContainer = document.getElementById('existing-reservations');
+                const timeSelector = document.getElementById('time-selector');
+                
+                const now = new Date();
+                const todayStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                const isToday = selectedDate === todayStr;
+                const currentMins = now.getHours() * 60 + now.getMinutes();
+                
+                const currentTable = allTables.find(t => t.id == currentTableId);
+                if (!currentTable) return;
+
+                const safeStatus = (currentTable.status || 'available').trim().toLowerCase();
+                const isOccupiedNow = isToday && safeStatus === 'occupied';
+                const existingRes = mockReservations.filter(r => r.tableId == currentTableId && r.date === selectedDate);
+                existingRes.sort((a,b) => (a.time||"19:00").localeCompare(b.time||"19:00"));
+
+                listContainer.innerHTML = '';
+
+                if (isOccupiedNow) {
+                    const totalNum = parseFloat(currentTable.current_total) || 0;
+                    let tempRes = JSON.parse(localStorage.getItem('tempReservations') || '[]');
+                    let occMatch = tempRes.find(r => r.tableId == currentTableId && r.type === 'occupied');
+                    
+                    let phoneDisplay = occMatch && occMatch.phone ? occMatch.phone : 'N/A';
+                    let paxDisplay = occMatch && occMatch.count ? occMatch.count : currentTable.capacity;
+                    let staffDisplay = occMatch && occMatch.staffName ? occMatch.staffName : 'System';
+                    let noteDisplay = occMatch && occMatch.note ? occMatch.note : 'No special notes';
+
+                    listContainer.innerHTML += `
+                        <div class="bg-red-50 border border-red-200 border-l-4 border-l-red-500 p-5 rounded-2xl shadow-sm relative mb-4">
+                            <div class="absolute top-0 right-0 bg-red-500 text-white text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow-sm">LIVE DB</div>
+                            
+                            <div class="flex items-center gap-3 mb-4 border-b border-red-100 pb-3">
+                                <div class="bg-red-100 p-2 rounded-lg text-red-500">
+                                    <i class="fas fa-utensils text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-red-700 font-black text-lg uppercase leading-none">Currently Seated</p>
+                                    <p class="text-[10px] text-red-400 font-bold mt-1">Time in: ${currentTable.current_time || '--:--'}</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 mb-3 border-b border-red-100 pb-3">
+                                <div class="space-y-1">
+                                    <p class="text-[8px] font-black text-red-400 uppercase tracking-widest">Customer Info</p>
+                                    <p class="text-sm font-bold text-slate-800"><i class="fas fa-user-circle text-red-400 mr-1"></i> ${currentTable.current_customer || 'Walk-in Guest'}</p>
+                                    <p class="text-[11px] text-slate-500 font-medium"><i class="fas fa-phone text-slate-300 mr-1"></i> ${phoneDisplay}</p>
+                                </div>
+                                <div class="space-y-1 border-l border-red-100 pl-4">
+                                    <p class="text-[8px] font-black text-red-400 uppercase tracking-widest">Details</p>
+                                    <p class="text-sm font-bold text-slate-800"><i class="fas fa-users text-purple-400 mr-1"></i> ${paxDisplay} pax</p>
+                                    <p class="text-[11px] text-slate-500 font-medium"><i class="fas fa-user-tie text-slate-300 mr-1"></i> Staff: ${staffDisplay}</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-3 mb-4">
+                                <p class="text-[10px] text-slate-500 italic bg-white p-2 rounded-lg border border-dashed border-red-200">
+                                    <i class="fas fa-comment-alt text-red-300 mr-1"></i> "${noteDisplay}"
+                                </p>
+                                <p class="text-sm text-green-700 font-black flex justify-between items-center bg-green-50 p-2.5 rounded-lg border border-green-200 shadow-inner">
+                                    <span class="uppercase tracking-wider text-[10px]"><i class="fas fa-receipt mr-1"></i> Live Bill</span>
+                                    <span>${totalNum.toLocaleString('vi-VN')} VND</span>
+                                </p>
+                            </div>
+                            
+                            <div class="flex gap-2">
+                                <button onclick="goToPOS(${currentTable.id})" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-xl text-[10px] uppercase shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-1"><i class="fas fa-cash-register"></i> Open POS</button>
+                                <button onclick="clearTableStatus(${currentTable.id})" class="flex-1 bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:text-red-500 font-bold py-2.5 rounded-xl text-[10px] uppercase transition shadow-sm flex items-center justify-center gap-1"><i class="fas fa-broom"></i> Clear Table</button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                existingRes.forEach(r => {
+                    listContainer.innerHTML += `
+                        <div class="bg-white border border-slate-200 border-l-4 border-l-blue-500 p-5 rounded-2xl shadow-sm hover:border-blue-300 transition mb-4">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <span class="text-[9px] font-mono font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-tighter">Booking ID: RES-${r.resId}</span>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <p class="text-blue-600 font-black text-2xl">${r.time}</p>
+                                        <span class="text-[9px] px-2 py-0.5 rounded font-black uppercase bg-green-100 text-green-700">Confirmed</span>
+                                    </div>
+                                </div>
+                                <button onclick="clearTableStatus(${r.tableId}, '${r.resId}')" class="text-slate-300 hover:text-red-500 transition"><i class="fas fa-trash-alt"></i></button>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 border-b border-slate-100 pb-4 mb-3">
+                                <div class="space-y-1">
+                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Customer Info</p>
+                                    <p class="text-sm font-bold text-slate-800"><i class="fas fa-user-circle text-blue-400 mr-1"></i> ${r.customerName}</p>
+                                    <p class="text-[11px] text-slate-500 font-medium"><i class="fas fa-phone text-slate-300 mr-1"></i> ${r.phone}</p>
+                                </div>
+                                <div class="space-y-1 border-l border-slate-100 pl-4">
+                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Details</p>
+                                    <p class="text-sm font-bold text-slate-800"><i class="fas fa-users text-purple-400 mr-1"></i> ${r.count} pax</p>
+                                    <p class="text-[11px] text-slate-500 font-medium"><i class="fas fa-user-tie text-slate-300 mr-1"></i> Staff: ${r.staffName}</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <p class="text-[10px] text-slate-400 italic bg-slate-50 p-2 rounded-lg border border-dashed border-slate-200">
+                                    <i class="fas fa-comment-alt mr-1"></i> "${r.note || 'No special notes'}"
+                                </p>
+                                <p class="text-[9px] text-slate-300 font-bold uppercase tracking-tighter flex justify-between">
+                                    <span><i class="fas fa-calendar-plus mr-1"></i> Created at:</span>
+                                    <span>${r.createdAt}</span>
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                if (listContainer.innerHTML === '') {
+                    listContainer.innerHTML = '<div class="text-center py-10 opacity-30 font-bold text-sm italic">No schedules for today.</div>';
+                }
+
+                timeSelector.innerHTML = '<option value="">-- Select Time --</option>';
+                for(let hour = 9; hour <= 22; hour++) {
+                    ['00', '30'].forEach(min => {
+                        let timeStr = `${hour.toString().padStart(2,'0')}:${min}`;
+                        let mins = hour * 60 + parseInt(min);
+                        let isConflict = (isToday && mins <= currentMins) || (isOccupiedNow && mins < currentMins + 120);
+                        let reason = "";
+                        if (isToday && mins <= currentMins) reason = "Past time";
+                        else if (isOccupiedNow && mins < currentMins + 120) reason = "Guest sitting";
+
+                        if(!isConflict) {
+                            for(let r of existingRes) {
+                                let [rh, rm] = (r.time || "19:00").split(':').map(Number);
+                                if(Math.abs(mins - (rh*60+rm)) < 90) { 
+                                    isConflict = true; 
+                                    reason = "Conflict"; 
+                                    break; 
+                                }
+                            }
+                        }
+                        if(isConflict) {
+                            timeSelector.innerHTML += `<option disabled>X ${timeStr} (${reason})</option>`;
+                        } else {
+                            timeSelector.innerHTML += `<option value="${timeStr}">+ ${timeStr}</option>`;
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("Render Schedule Error:", err);
+            }
+        }
+
+        async function submitReservation() {
+            const actionStatus = document.getElementById('action-status').value; 
+            const customerId = document.getElementById('booking-customer').value;
+            const name = document.getElementById('cust-name').value;
+            let time = document.getElementById('time-selector').value;
+            const phone = document.getElementById('cust-phone').value;
+            const count = parseInt(document.getElementById('cust-count').value) || 1;
+            const note = document.getElementById('cust-note').value;
+            const date = document.getElementById('booking-date').value;
+            const staffSelect = document.getElementById('staff-selector');
+            const staffName = staffSelect.options[staffSelect.selectedIndex].text;
+            
+            const currentTable = allTables.find(t => t.id == currentTableId);
+            if (count > currentTable.capacity) {
+                return alert(`ERROR: Table capacity exceeded! Maximum allowed is ${currentTable.capacity} pax.`);
+            }
+
+            if (actionStatus === 'occupied') {
+                const now = new Date();
+                time = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+            } else if (!time) {
+                return alert("Please select a reservation time!");
+            }
+
+            try {
+                let tempRes = JSON.parse(localStorage.getItem('tempReservations') || '[]');
+                if (actionStatus === 'occupied') {
+                    tempRes = tempRes.filter(r => !(r.tableId == currentTableId && r.type === 'occupied')); 
+                }
+
+                const creationTime = new Date().toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+                tempRes.push({
+                    resId: Math.floor(Math.random() * 10000),
+                    tableId: currentTableId,
+                    customerId: customerId || null,
+                    date: date,
+                    time: time,
+                    customerName: name || (actionStatus === 'occupied' ? 'Walk-in Guest' : 'Reserved Guest'),
+                    phone: phone || "N/A",
+                    count: count,
+                    note: note,
+                    status: 'Confirmed',
+                    staffName: staffName,
+                    type: actionStatus,
+                    createdAt: creationTime
+                });
+                localStorage.setItem('tempReservations', JSON.stringify(tempRes));
+
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/tables/${currentTableId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: actionStatus })
+                });
+
+                if(!response.ok) throw new Error("Update failed");
+                alert(`Action successful!`);
+                closeModal();
+                fetchTableData(); 
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        function goToPOS(tableId) {
+            window.location.href = `pos.html?table_id=${tableId}`;
+        }
+
+        // ĐÃ ĐẬP BỎ ĐIỀU KIỆN TRÓI BUỘC CŨ. 
+        // Logic mới: Hễ ấn xóa bất kỳ lịch đặt trước nào, Database sẽ ÉP BUỘC cập nhật lại thành Available (Xanh lá).
+        async function clearTableStatus(tableId, resId = null) {
+            if(!confirm("Confirm clear/cancel this item?")) return;
+
+            try {
+                let tempRes = JSON.parse(localStorage.getItem('tempReservations') || '[]');
+                
+                if (resId !== null) {
+                    // Xóa lịch khỏi LocalStorage
+                    tempRes = tempRes.filter(r => String(r.resId) !== String(resId));
+                } else {
+                    // Xóa khách đang ngồi (Walk-in)
+                    tempRes = tempRes.filter(r => !(r.tableId == tableId && r.type === 'occupied'));
+                }
+                
+                localStorage.setItem('tempReservations', JSON.stringify(tempRes));
+
+                // BẢO VỆ KÉP: Kiểm tra xem có đang click xóa một lịch Reserved tương lai, 
+                // TRONG KHI bàn đó hiện TẠI ĐANG CÓ KHÁCH (Màu Đỏ) hay không?
+                const currentTable = allTables.find(t => t.id == tableId);
+                const isCurrentlyOccupied = currentTable && currentTable.status.toLowerCase() === 'occupied';
+
+                // Chỉ ép Database về Xanh lá nếu bàn KHÔNG PHẢI đang màu Đỏ, HOẶC nếu đang màu đỏ thì ta vừa xóa chính cái màu đỏ đó (resId = null).
+                if (!(isCurrentlyOccupied && resId !== null)) {
+                    await fetch(`http://127.0.0.1:8000/api/v1/tables/${tableId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: "available" })
+                    });
+                }
+                
+                closeModal();
+                fetchTableData();
+
+            } catch (error) {
+                console.error("Lỗi khi xóa:", error);
+            }
+        }
+
+        function closeModal() { document.getElementById('booking-modal').classList.add('hidden'); }
+    </script>
+</body>
+</html>

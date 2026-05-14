@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Point of Sale - RMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 flex h-screen overflow-hidden">
+
+    <div class="w-72 bg-slate-900 min-h-screen text-white p-6 sticky top-0 shadow-xl flex flex-col z-20">
+        <div class="flex items-center gap-4 mb-8 px-2">
+            <div class="bg-blue-500 p-3 rounded-xl shadow-lg">
+                <i class="fas fa-utensils text-2xl text-white"></i>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold tracking-tight">RMS Pro</h2>
+                <p class="text-xs text-slate-400">Enterprise Edition</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 p-4 rounded-xl mb-8 border border-slate-700">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2"><i class="fas fa-user-shield mr-1"></i> Role Simulator</label>
+            <select id="role-simulator" onchange="changeRole()" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white font-bold outline-none focus:border-blue-500 transition cursor-pointer">
+                <option value="admin">Admin (Full Access)</option>
+                <option value="manager">Manager</option>
+                <option value="cashier">Cashier</option>
+                <option value="waiter">Waiter</option>
+                <option value="chef">Chef</option>
+            </select>
+        </div>
+
+        <nav class="space-y-2 flex-1" id="main-nav">
+            <a href="dashboard.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager">
+                <i class="fas fa-chart-line w-5"></i> Dashboard
+            </a>
+            <a href="customers.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-users w-5"></i> Customers
+            </a>
+            <a href="tables.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,waiter,cashier">
+                <i class="fas fa-th-large w-5"></i> Table Map
+            </a>
+            <a href="pos.html" class="rbac-nav flex items-center gap-3 p-3 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30" data-allowed="admin,manager,cashier,waiter">
+                <i class="fas fa-shopping-cart w-5"></i> Point of Sale
+            </a>
+            <a href="invoices.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier">
+                <i class="fas fa-file-invoice-dollar w-5"></i> Invoice History
+            </a>
+            <a href="menu.html" class="rbac-nav flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white" data-allowed="admin,manager,cashier,waiter,chef">
+                <i class="fas fa-list w-5"></i> Menu & Inventory
+            </a>
+        </nav>
+    </div>
+
+    <div class="flex-1 flex overflow-hidden">
+        
+        <div class="flex-1 flex flex-col bg-slate-50 p-6 overflow-hidden">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h1 class="text-2xl font-extrabold text-slate-800">Order Menu</h1>
+                    <p class="text-xs text-slate-500" id="api-status"><i class="fas fa-circle-notch fa-spin mr-1"></i> Connecting to Database...</p>
+                </div>
+                <div class="relative w-72">
+                    <i class="fas fa-search absolute left-4 top-3 text-slate-400"></i>
+                    <input type="text" id="search-box" oninput="filterMenu()" placeholder="Search items..." class="w-full bg-white border border-slate-200 shadow-sm rounded-xl py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-blue-500 outline-none font-medium">
+                </div>
+            </div>
+
+            <div class="flex gap-3 mb-6 overflow-x-auto no-scrollbar pb-2" id="category-container"></div>
+
+            <div class="flex-1 overflow-y-auto no-scrollbar pr-2">
+                <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="menu-container"></div>
+            </div>
+        </div>
+
+        <div class="w-[400px] bg-white border-l border-slate-200 shadow-xl flex flex-col h-full z-20">
+            
+            <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+                <h2 class="text-lg font-black text-slate-800 mb-2 flex justify-between items-center">
+                    <span>Current Order</span>
+                    <span id="order-status-badge" class="text-[9px] px-2 py-1 rounded bg-slate-200 text-slate-500 uppercase tracking-widest font-bold">No Table</span>
+                </h2>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Serving Table</label>
+                        <select id="table-selector" onchange="loadTableOrder()" class="w-full bg-white border border-slate-300 rounded-md px-2 py-1.5 text-xs font-bold text-blue-700 outline-none focus:border-blue-500 shadow-sm cursor-pointer">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Member</label>
+                        <select id="customer-selector" onchange="calculateTotal()" class="w-full bg-white border border-slate-300 rounded-md px-2 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-green-500 shadow-sm cursor-pointer">
+                            <option value="">Walk-in</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar bg-slate-50/30" id="cart-container">
+                <div class="flex items-center justify-center h-full text-slate-400 text-sm flex-col gap-3">
+                    <i class="fas fa-shopping-basket text-4xl opacity-30"></i>
+                    <p class="font-medium">No items selected</p>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col gap-3">
+                
+                <div class="text-xs font-medium text-slate-500 space-y-1 border-b border-slate-200 pb-2">
+                    <div class="flex justify-between"><span>Subtotal:</span> <span id="subtotal" class="text-slate-700 font-bold">0 VND</span></div>
+                    <div class="flex justify-between"><span>Service Fee (5%):</span> <span id="service-fee" class="text-slate-700 font-bold">0 VND</span></div>
+                    <div class="flex justify-between"><span>Tax (8%):</span> <span id="tax" class="text-slate-700 font-bold">0 VND</span></div>
+                    <div class="flex justify-between text-green-600"><span id="discount-label">Discount (0%):</span> <span id="discount" class="font-bold">- 0 VND</span></div>
+                    <div class="flex justify-between items-end pt-1 mt-1 border-t border-dashed border-slate-200">
+                        <span class="text-slate-800 font-black text-xs uppercase tracking-wider">TOTAL AMOUNT</span>
+                        <span class="text-2xl font-black text-blue-600 leading-none" id="total">0 VND</span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-2.5 rounded-lg border border-slate-200 shadow-inner">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Split Payment</span>
+                        <span id="payment-status" class="text-[10px] font-black text-red-500">Unpaid</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="flex flex-col">
+                            <label class="text-[9px] font-bold text-slate-600 mb-0.5"><i class="fas fa-money-bill-wave text-green-500"></i> Cash</label>
+                            <input type="text" id="pay-cash-amt" class="payment-input w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none text-right font-bold focus:border-blue-500 transition" placeholder="0" oninput="formatCurrencyInput(this); calculateSplit()">
+                        </div>
+                        <div class="flex flex-col">
+                            <label class="text-[9px] font-bold text-slate-600 mb-0.5"><i class="fas fa-credit-card text-blue-500"></i> Card</label>
+                            <input type="text" id="pay-card-amt" class="payment-input w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none text-right font-bold focus:border-blue-500 transition" placeholder="0" oninput="formatCurrencyInput(this); calculateSplit()">
+                        </div>
+                        <div class="flex flex-col">
+                            <label class="text-[9px] font-bold text-slate-600 mb-0.5"><i class="fas fa-mobile-alt text-purple-500"></i> Trans</label>
+                            <input type="text" id="pay-transfer-amt" class="payment-input w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none text-right font-bold focus:border-blue-500 transition" placeholder="0" oninput="formatCurrencyInput(this); calculateSplit()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2" id="action-buttons-1">
+                    <button onclick="clearCart()" class="py-2.5 rounded-lg font-bold text-slate-500 bg-white border border-slate-200 hover:bg-slate-100 transition shadow-sm flex items-center justify-center gap-1 text-xs">
+                        <i class="fas fa-trash-alt"></i> Clear Cart
+                    </button>
+                    <button onclick="saveOrderToKitchen()" class="py-2.5 rounded-lg font-bold text-white bg-orange-500 hover:bg-orange-600 shadow-sm transition flex items-center justify-center gap-1 text-xs">
+                        <i class="fas fa-fire"></i> To Kitchen
+                    </button>
+                </div>
+                
+                <button id="btn-checkout" onclick="checkoutAndClearTable()" disabled class="w-full py-3 rounded-lg font-black text-white bg-slate-400 cursor-not-allowed transition flex items-center justify-center gap-2 text-sm shadow-sm">
+                    <i class="fas fa-check-circle"></i> CHECKOUT
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = localStorage.getItem('userRole') || 'admin';
+        let menuItems = [];
+        let categories = ['All'];
+        let activeCategory = 'All';
+        let cart = [];
+        
+        let globalCustomers = []; 
+        let globalTotal = 0; 
+        let globalDiscountAmount = 0;
+        let globalServiceCharge = 0;
+        
+        const TAX_RATE = 0.08; 
+        const SERVICE_RATE = 0.05; 
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const roleSelect = document.getElementById('role-simulator');
+            if(roleSelect) roleSelect.value = currentRole;
+            applyRBAC();
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const preSelectedTableId = urlParams.get('table_id');
+            
+            initPOS(preSelectedTableId);
+        });
+
+        function changeRole() {
+            currentRole = document.getElementById('role-simulator').value;
+            localStorage.setItem('userRole', currentRole);
+            applyRBAC();
+        }
+
+        function applyRBAC() {
+            document.querySelectorAll('.rbac-nav').forEach(nav => {
+                const allowedRoles = nav.getAttribute('data-allowed').split(',');
+                if (allowedRoles.includes(currentRole)) nav.style.display = 'flex';
+                else nav.style.display = 'none';
+            });
+            
+            const allowedForPOS = ['admin', 'manager', 'cashier', 'waiter'];
+            if (!allowedForPOS.includes(currentRole)) {
+                alert("ACCESS DENIED: You do not have permission to access the Point of Sale page.");
+                window.location.href = "menu.html";
+                return;
+            }
+
+            const btnCheckout = document.getElementById('btn-checkout');
+            if(btnCheckout) {
+                if (currentRole === 'waiter') {
+                    btnCheckout.style.display = 'none';
+                    document.querySelector('.bg-white.p-2\\.5.rounded-lg.border.border-slate-200.shadow-inner').style.display = 'none';
+                } else {
+                    btnCheckout.style.display = 'flex';
+                    document.querySelector('.bg-white.p-2\\.5.rounded-lg.border.border-slate-200.shadow-inner').style.display = 'block';
+                }
+            }
+        }
+
+        async function initPOS(preSelectedTableId) {
+            try {
+                const nocache = new Date().getTime();
+                
+                try {
+                    const menuResponse = await fetch(`http://127.0.0.1:8000/api/v1/menu/?t=${nocache}`);
+                    if (menuResponse.ok) {
+                        let rawMenuItems = await menuResponse.json();
+                        
+                        menuItems = rawMenuItems.map(item => {
+                            let isAvail = true;
+                            if (item.hasOwnProperty('is_available')) isAvail = (item.is_available == 1 || item.is_available == true);
+                            else if (item.hasOwnProperty('IsAvailable')) isAvail = (item.IsAvailable == 1 || item.IsAvailable == true);
+
+                            return {
+                                id: item.id || item.DishID,
+                                name: item.name || item.DishName,
+                                price: parseFloat(item.price || item.Price) || 0,
+                                category: (item.category || item.CategoryName || 'Uncategorized').trim(),
+                                is_available: isAvail
+                            };
+                        });
+
+                        const backendCategories = [...new Set(menuItems.map(item => item.category))];
+                        categories = ['All', ...backendCategories.sort()];
+                    }
+                } catch (error) {
+                    console.warn("Could not fetch menu.");
+                }
+
+                renderCategories();
+                renderMenu(menuItems);
+
+                try {
+                    const customerResponse = await fetch(`http://127.0.0.1:8000/api/v1/customers/?t=${nocache}`);
+                    if (customerResponse.ok) {
+                        globalCustomers = await customerResponse.json();
+                        populateCustomerSelector(globalCustomers);
+                    }
+                } catch (error) {
+                    console.warn("Could not fetch customers.");
+                }
+
+                const tableResponse = await fetch(`http://127.0.0.1:8000/api/v1/tables/?t=${nocache}`);
+                if (!tableResponse.ok) throw new Error("Table Network Error");
+                const tables = await tableResponse.json();
+                
+                document.getElementById('api-status').innerHTML = `<span class="text-green-600 font-bold"><i class="fas fa-check-circle mr-1"></i> Live DB Connected</span>`;
+                
+                populateTableSelector(tables, preSelectedTableId);
+                
+                if (preSelectedTableId) {
+                    await loadTableOrder();
+                }
+
+            } catch (error) {
+                console.error("Initialization Error:", error);
+                document.getElementById('api-status').innerHTML = `<span class="text-red-500 font-bold"><i class="fas fa-exclamation-circle mr-1"></i> Backend Offline</span>`;
+                renderCategories();
+                renderMenu([]);
+            }
+        }
+
+        function populateTableSelector(tables, preSelected) {
+            const selector = document.getElementById('table-selector');
+            selector.innerHTML = '<option value="">-- Select --</option>';
+            
+            tables.forEach(t => {
+                const status = (t.status || 'available').trim().toLowerCase();
+                const statusStr = status === 'occupied' ? 'Occupied' : (status === 'reserved' ? 'Reserved' : 'Available');
+                
+                const option = document.createElement('option');
+                option.value = t.id;
+                option.text = `Table ${t.id} (${statusStr})`;
+                
+                if (status !== 'occupied') {
+                    option.disabled = true;
+                    option.className = "text-slate-400 bg-slate-50 italic"; 
+                }
+                
+                if (preSelected && String(t.id) === String(preSelected) && status === 'occupied') {
+                    option.selected = true;
+                }
+                
+                selector.appendChild(option);
+            });
+        }
+
+        function populateCustomerSelector(customers) {
+            const selector = document.getElementById('customer-selector');
+            selector.innerHTML = '<option value="">Walk-in (No Discount)</option>';
+            
+            customers.forEach(c => {
+                const cId = c.id || c.CustomerID;
+                const cName = c.name || c.CustomerName;
+                const cPhone = c.phone || c.Phone || '';
+                const cPoints = c.points || c.loyalty_points || c.LoyaltyPoints || 0;
+                
+                let tierMarker = "";
+                if (cPoints >= 1000) tierMarker = " [PLATINUM - 15%]";
+                else if (cPoints >= 500) tierMarker = " [GOLD - 10%]";
+                else if (cPoints >= 200) tierMarker = " [SILVER - 5%]";
+
+                const option = document.createElement('option');
+                option.value = cId;
+                option.text = `${cName} ${cPhone ? '('+cPhone+')' : ''}${tierMarker}`;
+                selector.appendChild(option);
+            });
+        }
+
+        async function loadTableOrder() {
+            const tableId = document.getElementById('table-selector').value;
+            const badge = document.getElementById('order-status-badge');
+            
+            if (!tableId) {
+                cart = [];
+                updateCartUI();
+                badge.className = "text-[9px] px-2 py-1 rounded bg-slate-200 text-slate-500 uppercase font-bold tracking-widest";
+                badge.innerText = "No Table";
+                resetPayments();
+                return;
+            }
+
+            badge.innerHTML = "<i class='fas fa-spinner fa-spin mr-1'></i> Loading...";
+
+            try {
+                const nocache = new Date().getTime();
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/orders/table/${tableId}?t=${nocache}`);
+                if (!response.ok) throw new Error("Failed to fetch active order");
+                
+                const data = await response.json();
+                
+                if (data.items && data.items.length > 0) {
+                    cart = data.items;
+                    badge.className = "text-[9px] px-2 py-1 rounded bg-orange-100 text-orange-600 uppercase font-bold tracking-widest border border-orange-200";
+                    badge.innerHTML = "<i class='fas fa-fire mr-1'></i> Active Order";
+                    
+                    if(data.customer_id) {
+                        document.getElementById('customer-selector').value = data.customer_id;
+                    } else {
+                        document.getElementById('customer-selector').value = "";
+                    }
+
+                } else {
+                    cart = [];
+                    badge.className = "text-[9px] px-2 py-1 rounded bg-blue-100 text-blue-600 uppercase font-bold tracking-widest border border-blue-200";
+                    badge.innerHTML = "<i class='fas fa-edit mr-1'></i> New Order";
+                    
+                    let tempRes = JSON.parse(localStorage.getItem('tempReservations') || '[]');
+                    let res = tempRes.find(r => r.tableId == tableId && r.type === 'occupied');
+                    if (res && res.customerId) {
+                        document.getElementById('customer-selector').value = res.customerId;
+                    } else {
+                        document.getElementById('customer-selector').value = "";
+                    }
+                }
+            } catch (error) {
+                console.error("Cart Fetch Error:", error);
+                cart = [];
+                badge.className = "text-[9px] px-2 py-1 rounded bg-red-100 text-red-600 uppercase font-bold tracking-widest border border-red-200";
+                badge.innerHTML = "<i class='fas fa-exclamation-triangle mr-1'></i> Sync Error";
+            }
+            
+            resetPayments();
+            updateCartUI();
+            calculateTotal(); 
+        }
+
+        function renderCategories() {
+            const container = document.getElementById('category-container');
+            container.innerHTML = '';
+            categories.forEach(cat => {
+                const isActive = cat === activeCategory;
+                const btnClass = isActive 
+                    ? "bg-slate-800 text-white font-bold shadow-md" 
+                    : "bg-white text-slate-600 font-medium hover:bg-slate-200 border border-slate-200";
+                
+                container.innerHTML += `<button onclick="setCategory('${cat}')" class="px-4 py-1.5 text-sm rounded-full whitespace-nowrap transition-all ${btnClass}">${cat}</button>`;
+            });
+        }
+
+        function setCategory(cat) {
+            activeCategory = cat;
+            renderCategories();
+            filterMenu();
+        }
+
+        function filterMenu() {
+            const keyword = document.getElementById('search-box').value.toLowerCase();
+            const filtered = menuItems.filter(item => {
+                const matchCat = activeCategory === 'All' || item.category === activeCategory;
+                const matchKey = item.name.toLowerCase().includes(keyword);
+                return matchCat && matchKey;
+            });
+            renderMenu(filtered);
+        }
+
+        function renderMenu(items) {
+            const container = document.getElementById('menu-container');
+            container.innerHTML = '';
+            
+            items.forEach(item => {
+                const displayIcon = `<div class="text-3xl mb-2 text-slate-300 group-hover:scale-110 group-hover:text-blue-500 transition-all text-center pt-2"><i class="fas fa-utensils"></i></div>`;
+
+                if (item.is_available) {
+                    container.innerHTML += `
+                        <div onclick="addToCart(${item.id}, '${item.name}', ${item.price})" class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-400 transition cursor-pointer flex flex-col h-32 relative overflow-hidden group">
+                            ${displayIcon}
+                            <h3 class="font-bold text-slate-800 text-xs leading-tight line-clamp-2 mt-auto text-center">${item.name}</h3>
+                            <p class="text-blue-600 font-black mt-1 text-[11px] text-center">${item.price.toLocaleString('vi-VN')} VND</p>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML += `
+                        <div class="bg-red-50 p-3 rounded-xl border-2 border-red-400 shadow-sm opacity-70 cursor-not-allowed flex flex-col h-32 relative overflow-hidden">
+                            <div class="absolute top-1 right-1 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shadow-sm z-10">Hết Hàng</div>
+                            <div class="text-3xl mb-2 text-red-300 text-center pt-2"><i class="fas fa-ban"></i></div>
+                            <h3 class="font-bold text-red-900 text-xs leading-tight line-clamp-2 mt-auto text-center">${item.name}</h3>
+                            <p class="text-red-400 font-bold mt-1 line-through text-[11px] text-center">${item.price.toLocaleString('vi-VN')} VND</p>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        function addToCart(id, name, price) {
+            const existing = cart.find(i => i.id === id);
+            if (existing) {
+                existing.qty++;
+            } else {
+                cart.push({ id, name, price, qty: 1, note: "", isEditing: false });
+            }
+            updateCartUI();
+        }
+
+        function changeQty(id, delta) {
+            const item = cart.find(i => i.id === id);
+            if (!item) return;
+            item.qty += delta;
+            if (item.qty <= 0) cart = cart.filter(i => i.id !== id);
+            updateCartUI();
+        }
+
+        function toggleEditNote(id) {
+            const item = cart.find(i => i.id === id);
+            if (!item) return;
+            item.isEditing = true;
+            updateCartUI();
+        }
+
+        function saveNote(id) {
+            const item = cart.find(i => i.id === id);
+            if (!item) return;
+            const input = document.getElementById(`note-input-${id}`);
+            if (input) {
+                item.note = input.value.trim();
+                item.isEditing = false;
+                updateCartUI();
+            }
+        }
+
+        function updateCartUI() {
+            const container = document.getElementById('cart-container');
+            
+            if (cart.length === 0) {
+                container.innerHTML = `<div class="flex items-center justify-center h-full text-slate-400 text-sm flex-col gap-3"><i class="fas fa-shopping-basket text-4xl opacity-30"></i><p class="font-medium text-xs">No items selected</p></div>`;
+                calculateTotal();
+                return;
+            }
+
+            container.innerHTML = '';
+            cart.forEach(item => {
+                let noteArea = '';
+
+                if (item.isEditing) {
+                    noteArea = `
+                        <div class="mt-2 flex items-center gap-2 w-full bg-blue-50 p-1 rounded-md border border-blue-200 shadow-inner">
+                            <input type="text" id="note-input-${item.id}" value="${item.note}" placeholder="Note..." class="flex-1 text-[10px] px-1 py-1 border-none bg-transparent outline-none text-blue-700 placeholder-blue-400 font-medium" onkeypress="if(event.key === 'Enter') saveNote(${item.id})">
+                            <button onclick="saveNote(${item.id})" class="bg-blue-500 text-white w-5 h-5 rounded flex items-center justify-center text-[10px] hover:bg-blue-600 shadow-sm transition">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    if (item.note) {
+                        noteArea = `
+                            <div class="mt-2 flex items-center gap-1">
+                                <p class="text-[10px] text-blue-600 font-medium italic flex-1 bg-blue-50/70 px-2 py-1 rounded-md border border-blue-100/50">
+                                    <i class="fas fa-comment-dots mr-1 text-blue-400"></i> ${item.note}
+                                </p>
+                                <button onclick="toggleEditNote(${item.id})" class="text-slate-300 hover:text-blue-500 p-1 transition">
+                                    <i class="fas fa-pen text-[9px]"></i>
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        noteArea = `
+                            <button onclick="toggleEditNote(${item.id})" class="mt-2 text-[9px] font-bold text-slate-400 hover:text-blue-500 flex items-center transition w-max bg-slate-50 hover:bg-blue-50 px-1.5 py-0.5 rounded">
+                                <i class="fas fa-plus mr-1"></i> Note
+                            </button>
+                        `;
+                    }
+                }
+
+                container.innerHTML += `
+                    <div class="flex flex-col bg-white p-3 rounded-lg border border-slate-100 shadow-sm transition-all hover:border-slate-300">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1 pr-2">
+                                <h4 class="font-bold text-slate-800 text-xs leading-tight">${item.name}</h4>
+                                <p class="text-blue-600 font-bold text-[10px] mt-0.5">${item.price.toLocaleString('vi-VN')} VND</p>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-50 rounded-md p-0.5 border border-slate-200 shadow-inner">
+                                <button onclick="changeQty(${item.id}, -1)" class="w-6 h-6 flex items-center justify-center bg-white rounded text-slate-600 shadow-sm hover:text-red-500 transition"><i class="fas fa-minus text-[9px]"></i></button>
+                                <span class="font-black text-xs w-3 text-center text-slate-800">${item.qty}</span>
+                                <button onclick="changeQty(${item.id}, 1)" class="w-6 h-6 flex items-center justify-center bg-white rounded text-slate-600 shadow-sm hover:text-blue-500 transition"><i class="fas fa-plus text-[9px]"></i></button>
+                            </div>
+                        </div>
+                        ${noteArea}
+                    </div>
+                `;
+            });
+            calculateTotal();
+        }
+
+        function calculateTotal() {
+            let sub = 0;
+            cart.forEach(item => sub += item.price * item.qty);
+            
+            globalServiceCharge = sub * SERVICE_RATE; 
+            const tax = sub * TAX_RATE; 
+            globalDiscountAmount = 0;
+            let discountRate = 0;
+
+            const selectedCustomerId = document.getElementById('customer-selector').value;
+            
+            if (selectedCustomerId && sub > 0) {
+                const customer = globalCustomers.find(c => (c.id || c.CustomerID) == selectedCustomerId);
+                if (customer) {
+                    const pts = customer.points || customer.loyalty_points || customer.LoyaltyPoints || 0;
+                    if (pts >= 1000) { discountRate = 0.15; }      // Platinum
+                    else if (pts >= 500) { discountRate = 0.10; }  // Gold
+                    else if (pts >= 200) { discountRate = 0.05; }  // Silver
+                }
+                globalDiscountAmount = sub * discountRate; 
+            }
+
+            globalTotal = Math.max(0, (sub + globalServiceCharge + tax) - globalDiscountAmount);
+
+            document.getElementById('subtotal').innerText = `${sub.toLocaleString('vi-VN')} VND`;
+            document.getElementById('service-fee').innerText = `${globalServiceCharge.toLocaleString('vi-VN')} VND`;
+            document.getElementById('tax').innerText = `${tax.toLocaleString('vi-VN')} VND`;
+            
+            document.getElementById('discount-label').innerText = `Discount (${(discountRate * 100).toFixed(0)}%):`;
+            document.getElementById('discount').innerText = `- ${globalDiscountAmount.toLocaleString('vi-VN')} VND`;
+            
+            document.getElementById('total').innerText = `${globalTotal.toLocaleString('vi-VN')} VND`;
+            
+            calculateSplit(); 
+        }
+
+        function formatCurrencyInput(input) {
+            let value = input.value.replace(/\D/g, ''); 
+            if (value !== '') {
+                input.value = parseInt(value, 10).toLocaleString('vi-VN');
+            } else {
+                input.value = '';
+            }
+        }
+
+        function getPaymentValue(id) {
+            let valStr = document.getElementById(id).value;
+            let cleanVal = valStr.replace(/\./g, '');
+            return parseFloat(cleanVal) || 0;
+        }
+
+        function resetPayments() {
+            document.getElementById('pay-cash-amt').value = '';
+            document.getElementById('pay-card-amt').value = '';
+            document.getElementById('pay-transfer-amt').value = '';
+            calculateSplit();
+        }
+
+        function calculateSplit() {
+            const btn = document.getElementById('btn-checkout');
+            const statusEl = document.getElementById('payment-status');
+            
+            if (globalTotal === 0 || cart.length === 0) {
+                statusEl.innerText = `Unpaid`;
+                statusEl.className = "text-[10px] font-black text-slate-400";
+                btn.disabled = true;
+                btn.classList.replace('bg-green-600', 'bg-slate-400');
+                btn.classList.remove('hover:bg-green-700');
+                return;
+            }
+
+            const cash = getPaymentValue('pay-cash-amt');
+            const card = getPaymentValue('pay-card-amt');
+            const transfer = getPaymentValue('pay-transfer-amt');
+            
+            const paid = cash + card + transfer;
+            const diff = paid - globalTotal;
+            
+            if (paid === 0) {
+                statusEl.innerText = `Pending: ${globalTotal.toLocaleString('vi-VN')}`;
+                statusEl.className = "text-[10px] font-black text-red-500";
+                btn.disabled = true;
+                btn.classList.replace('bg-green-600', 'bg-slate-400');
+                btn.classList.remove('hover:bg-green-700');
+            } else if (diff < 0) {
+                statusEl.innerText = `Missing: ${Math.abs(diff).toLocaleString('vi-VN')}`;
+                statusEl.className = "text-[10px] font-black text-orange-500";
+                btn.disabled = true;
+                btn.classList.replace('bg-green-600', 'bg-slate-400');
+                btn.classList.remove('hover:bg-green-700');
+            } else {
+                statusEl.innerText = diff > 0 ? `Change: ${diff.toLocaleString('vi-VN')}` : `Fully Paid`;
+                statusEl.className = "text-[10px] font-black text-green-600";
+                btn.disabled = false;
+                btn.classList.replace('bg-slate-400', 'bg-green-600');
+                btn.classList.add('hover:bg-green-700');
+            }
+        }
+
+        function clearCart() {
+            const tableId = document.getElementById('table-selector').value;
+            if(!tableId) {
+                cart = []; updateCartUI(); return;
+            }
+            if(confirm("Are you sure you want to clear the current unsaved items?")) {
+                loadTableOrder(); 
+            }
+        }
+
+        async function saveOrderToKitchen() {
+            const tableId = document.getElementById('table-selector').value;
+            const customerId = document.getElementById('customer-selector').value;
+
+            if (!tableId) return alert("Please select a Table before sending order to kitchen!");
+            if (cart.length === 0) return alert("Cart is empty!");
+
+            const payload = {
+                table_id: parseInt(tableId),
+                customer_id: customerId ? parseInt(customerId) : null,
+                staff_id: 1, 
+                items: cart.map(item => ({
+                    dish_id: item.id,
+                    quantity: item.qty,
+                    unit_price: item.price,
+                    notes: item.note || ""
+                }))
+            };
+
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/orders/kitchen`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errInfo = await response.json();
+                    throw new Error(errInfo.detail || "Failed to save order");
+                }
+
+                alert(`Order for Table ${tableId} has been sent to the kitchen successfully!`);
+                await loadTableOrder(); 
+
+            } catch (error) {
+                console.error("Save Error:", error);
+                alert(`BACKEND ERROR: ${error.message}`);
+            }
+        }
+
+        async function checkoutAndClearTable() {
+            const tableId = document.getElementById('table-selector').value;
+            const customerId = document.getElementById('customer-selector').value;
+            
+            if (!tableId) return alert("Please select a Table to checkout!");
+            
+            const cash = getPaymentValue('pay-cash-amt');
+            const card = getPaymentValue('pay-card-amt');
+            const transfer = getPaymentValue('pay-transfer-amt');
+            
+            const payments = [];
+            if (cash > 0) payments.push({ method: "cash", amount: cash });
+            if (card > 0) payments.push({ method: "card", amount: card });
+            if (transfer > 0) payments.push({ method: "bank_transfer", amount: transfer });
+
+            if (!confirm(`Confirm payment for Table ${tableId} and clear the table?`)) return;
+
+            const payload = {
+                table_id: parseInt(tableId),
+                customer_id: customerId ? parseInt(customerId) : null,
+                payments: payments,
+                discount_amount: globalDiscountAmount,
+                service_charge: globalServiceCharge
+            };
+
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/orders/checkout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Unknown Server Error");
+                }
+
+                alert(`PAYMENT SUCCESSFUL!\nTable ${tableId} has been cleared and invoice generated.`);
+                window.location.href = "invoices.html";
+
+            } catch (error) {
+                console.error("Checkout Error:", error);
+                alert(`DATABASE ERROR:\n\n${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

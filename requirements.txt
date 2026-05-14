@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+mysql-connector-python
+python-jose[cryptography]
+passlib[bcrypt]
+faker
+matplotlib

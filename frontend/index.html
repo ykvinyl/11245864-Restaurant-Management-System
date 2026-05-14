@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập - RMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 h-screen flex items-center justify-center">
+
+    <div class="bg-white p-8 rounded-xl shadow-lg w-96">
+        <div class="text-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">Đăng nhập Hệ thống</h2>
+        </div>
+
+        <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+            <div>
+                <label class="block text-sm text-gray-700">Tài khoản</label>
+                <input type="text" id="username" value="Admin" required class="mt-1 block w-full px-4 py-2 border rounded-lg">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-700">Mật khẩu</label>
+                <input type="password" id="password" value="admin123" required class="mt-1 block w-full px-4 py-2 border rounded-lg">
+            </div>
+            <div id="error-message" class="text-red-500 text-sm hidden"></div>
+            
+            <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+                Đăng Nhập
+            </button>
+        </form>
+    </div>
+
+    <script>
+        async function handleLogin(e) {
+            // 1. Chặn ngay việc reload trang
+            e.preventDefault(); 
+            console.log("🚀 Đã bấm nút đăng nhập! Không bị reload trang nữa nhé.");
+
+            // 2. Lấy dữ liệu
+            const u = document.getElementById("username").value.trim();
+            const p = document.getElementById("password").value;
+            const err = document.getElementById("error-message");
+            const btn = document.getElementById("submitBtn");
+
+            err.classList.add("hidden");
+            btn.innerText = "Đang xử lý...";
+
+            try {
+                // 3. Gửi thẳng đến Backend
+                const res = await fetch("http://127.0.0.1:8000/api/v1/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: u, password: p })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.detail || "Sai tài khoản hoặc mật khẩu");
+                }
+
+                // 4. Thành công!
+                console.log("✅ Thành công lấy Token:", data.access_token);
+                localStorage.setItem("access_token", data.access_token);
+                
+                alert("Đăng nhập thành công! Bấm OK để vào Dashboard.");
+                window.location.href = "dashboard.html";
+
+            } catch (error) {
+                console.error("❌ Lỗi:", error);
+                err.textContent = "Lỗi: " + error.message;
+                err.classList.remove("hidden");
+                btn.innerText = "Đăng Nhập";
+            }
+        }
+    </script>
+</body>
+</html>
